@@ -12,6 +12,7 @@ The runner enforces that in code:
 - Before verification and commit, the runner rejects any changed path outside `apps/pc-web`, except copied `.codex/agents/*.toml` files.
 - The same path check runs again after lint/build and immediately before commit.
 - Commits stage only `apps/pc-web`.
+- Screenshots from `截图1` / `截图2` / `截图3` cells are extracted from WPS `DISPIMG` images and passed to Codex with `--image`.
 
 ## Defaults
 
@@ -69,6 +70,7 @@ Each run writes:
 
 - `runs/YYYY-MM-DD/report.json`
 - `runs/YYYY-MM-DD/report.md`
+- `runs/YYYY-MM-DD/images/<branch>/...`
 
 Successful bug fixes are committed locally in the target monorepo worktree branch named like `fix/bug-87-...`.
 

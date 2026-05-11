@@ -17,11 +17,11 @@ def write_reports(output_dir: Path, results: list[dict[str, Any]]) -> tuple[Path
 
 
 def _markdown(results: list[dict[str, Any]]) -> str:
-    lines = ["# Nightly Bugfix Automation Report", "", "| Issue | Status | Branch | Detail |", "| --- | --- | --- | --- |"]
+    lines = ["# Nightly Bugfix Automation Report", "", "| Issue | Status | Branch | Images | Detail |", "| --- | --- | --- | --- | --- |"]
     for result in results:
+        images = "<br>".join(result.get("images", []))
         lines.append(
-            f"| {result.get('issue_id', '')} | {result.get('status', '')} | {result.get('branch', '')} | {result.get('detail', '')} |"
+            f"| {result.get('issue_id', '')} | {result.get('status', '')} | {result.get('branch', '')} | {images} | {result.get('detail', '')} |"
         )
     lines.append("")
     return "\n".join(lines)
-
