@@ -143,8 +143,7 @@ class FilteringPromptReportTest(unittest.TestCase):
         self.assertEqual(command[:2], ["/usr/local/bin/codex", "exec"])
         self.assertIn("--sandbox", command)
         self.assertIn("workspace-write", command)
-        self.assertIn("--ask-for-approval", command)
-        self.assertIn("never", command)
+        self.assertNotIn("--ask-for-approval", command)
         self.assertIn("--cd", command)
 
 

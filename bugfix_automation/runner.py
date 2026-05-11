@@ -128,8 +128,6 @@ def codex_command(codex_bin: str, worktree_path: str, prompt: str, image_paths: 
         "exec",
         "--sandbox",
         "workspace-write",
-        "--ask-for-approval",
-        "never",
         "--cd",
         worktree_path,
     ]
