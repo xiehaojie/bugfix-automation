@@ -136,7 +136,6 @@ class FilteringPromptReportTest(unittest.TestCase):
             ".codex/agents/frontend-fix-agent.toml",
             ".codex/",
             ".bugfix-automation-bin/",
-            ".bugfix-automation-hooks/",
             "apps/server/src/main.java",
         ]
 

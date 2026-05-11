@@ -79,7 +79,7 @@ def changed_paths(path: Path) -> list[str]:
 
 def out_of_scope_paths(paths: list[str], target_app_path: str) -> list[str]:
     allowed_prefix = target_app_path.rstrip("/") + "/"
-    allowed_automation_paths = (".codex/", ".bugfix-automation-bin/", ".bugfix-automation-hooks/")
+    allowed_automation_paths = (".codex/", ".bugfix-automation-bin/")
     return [
         path
         for path in paths
@@ -106,28 +106,6 @@ exec "{real_git}" "$@"
     )
     os.chmod(wrapper, 0o755)
     return wrapper_dir
-
-
-def install_no_push_hook(worktree_path: Path) -> Path:
-    hooks_dir = worktree_path / ".bugfix-automation-hooks"
-    hooks_dir.mkdir(parents=True, exist_ok=True)
-    hook = hooks_dir / "pre-push"
-    hook.write_text(
-        """#!/bin/sh
-echo "git push is disabled by bugfix automation" >&2
-exit 1
-""",
-        encoding="utf-8",
-    )
-    os.chmod(hook, 0o755)
-    subprocess.run(
-        ["git", "config", "core.hooksPath", str(hooks_dir)],
-        cwd=worktree_path,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    return hook
 
 
 def commit_all(path: Path, message: str) -> str:

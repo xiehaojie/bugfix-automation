@@ -8,7 +8,6 @@ The runner enforces that in code:
 
 - Codex runs with `--sandbox workspace-write --ask-for-approval never`.
 - `PATH` is prefixed with a local `git` wrapper that blocks `git push`.
-- Each temporary worktree gets a local `pre-push` hook that exits non-zero.
 - Before verification and commit, the runner rejects any changed path outside `apps/pc-web`, except copied `.codex/agents/*.toml` files.
 - The same path check runs again after lint/build and immediately before commit.
 - Commits stage only `apps/pc-web`.

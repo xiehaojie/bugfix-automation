@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bugfix_automation.worktree import create_no_push_git_wrapper, install_no_push_hook, worktree_path_for_branch
+from bugfix_automation.worktree import create_no_push_git_wrapper, worktree_path_for_branch
 
 
 class WorktreeTest(unittest.TestCase):
@@ -20,16 +20,6 @@ class WorktreeTest(unittest.TestCase):
 
         self.assertIn("git push is disabled", content)
         self.assertIn('if [ "$1" = "push" ]', content)
-
-    def test_pre_push_hook_blocks_push(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            hook = install_no_push_hook(Path(tmp))
-
-            content = hook.read_text(encoding="utf-8")
-
-        self.assertEqual(hook.name, "pre-push")
-        self.assertIn("git push is disabled", content)
-
 
 if __name__ == "__main__":
     unittest.main()

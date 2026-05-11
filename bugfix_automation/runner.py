@@ -19,7 +19,6 @@ from bugfix_automation.worktree import (
     ensure_worktree,
     has_app_changes,
     install_project_agents,
-    install_no_push_hook,
     out_of_scope_paths,
     branch_exists,
     branch_worktree_path,
@@ -93,7 +92,6 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
             return _result(bug, "skipped", branch, "Branch already exists in target repository.", image_paths)
         worktree_path = ensure_worktree(config.target_repo, config.worktree_root, branch)
         install_project_agents(worktree_path, Path(__file__).resolve().parents[1])
-        install_no_push_hook(worktree_path)
         git_wrapper_dir = create_no_push_git_wrapper(worktree_path)
         prompt = render_codex_prompt(bug, config.target_app_path)
         _run(codex_command(config.codex_bin, str(worktree_path), prompt, image_paths), cwd=worktree_path, path_prefix=git_wrapper_dir, stdin_text=prompt)
