@@ -48,6 +48,7 @@ type BugItem = {
   description: string;
   remark: string;
   remark2: string;
+  images: Array<{ path: string; name: string; url: string }>;
 };
 
 type BugsPayload = {
@@ -241,6 +242,7 @@ export default function ApprovalPage() {
                   <tr>
                     <th>序号</th>
                     <th>Excel 行</th>
+                    <th>截图</th>
                     <th>来源</th>
                     <th>分类</th>
                     <th>提出人状态</th>
@@ -254,6 +256,15 @@ export default function ApprovalPage() {
                     <tr key={`${bug.issue_id}-${bug.excel_row}`}>
                       <td><strong>{bug.issue_id}</strong></td>
                       <td>{bug.excel_row}</td>
+                      <td>
+                        <div className="screenshotCell">
+                          {(bug.images ?? []).length > 0 ? bug.images.map(image => (
+                            <a key={image.path} href={image.url} target="_blank" rel="noreferrer" title={image.name}>
+                              <img src={image.url} alt={`Bug ${bug.issue_id} 截图 ${image.name}`} />
+                            </a>
+                          )) : <span>无</span>}
+                        </div>
+                      </td>
                       <td>{bug.source_system}</td>
                       <td>
                         <div className="categoryCell">

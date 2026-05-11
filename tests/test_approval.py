@@ -116,7 +116,9 @@ branch refs/heads/feature/demo
                 {"_excel_row": "47", "序号": "2", "提出人状态": "待处理", "来源系统": "后台", "对接人": "谢浩杰", "对接人状态": "处理中", "问题描述": "跳过"},
             ]
             with unittest.mock.patch("bugfix_automation.runner.read_sheet", return_value=rows):
-                bugs = _bug_payload(config)
+                image_path = root / "runs" / "approval-images" / "fix-1-demo" / "row-46-image-1.png"
+                with unittest.mock.patch("bugfix_automation.approval_api.export_bug_images", return_value=[image_path]):
+                    bugs = _bug_payload(config)
 
         self.assertEqual(len(bugs), 1)
         self.assertEqual(bugs[0]["issue_id"], "1")
@@ -124,6 +126,8 @@ branch refs/heads/feature/demo
         self.assertEqual(bugs[0]["primary_category"], "个人空间")
         self.assertEqual(bugs[0]["remark"], "补充备注")
         self.assertEqual(bugs[0]["branch"], "fix/1-上传反馈不明显")
+        self.assertEqual(bugs[0]["images"][0]["path"], str(image_path))
+        self.assertIn("/api/image?path=", bugs[0]["images"][0]["url"])
 
 
 if __name__ == "__main__":

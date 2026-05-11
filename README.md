@@ -145,6 +145,7 @@ python3 -m bugfix_automation.cli install-launchd
 
 - 左侧待审批分支列表和待处理数量
 - 实时读取 Excel，并列出当前命中筛选规则的 bug
+- 如果 Excel 行里有 `截图1` / `截图2` / `截图3`，会显示截图缩略图，点击可打开原图
 - 已无 diff 但 worktree 仍残留的分支列表
 - 改动文件列表
 - 类似 GitHub 的代码比对
@@ -153,7 +154,7 @@ python3 -m bugfix_automation.cli install-launchd
 - 清理残留 worktree
 - 重新修改
 
-页面会在打开时读取一次 Excel，之后每 30 秒自动刷新一次；也可以点击“刷新状态”手动刷新。Excel 筛选结果表会展示序号、Excel 行号、来源系统、一级/二级分类、提出人状态、对接人状态、问题描述、备注和对应 `fix/*` 分支名。
+页面会在打开时读取一次 Excel，之后每 30 秒自动刷新一次；也可以点击“刷新状态”手动刷新。Excel 筛选结果表会展示序号、Excel 行号、截图、来源系统、一级/二级分类、提出人状态、对接人状态、问题描述、备注和对应 `fix/*` 分支名。截图会导出到 `runs/approval-images/`，只通过本地 API 访问。
 
 重新修改可以补充：
 
