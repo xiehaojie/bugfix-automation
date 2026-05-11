@@ -79,13 +79,13 @@ def changed_paths(path: Path) -> list[str]:
 
 def out_of_scope_paths(paths: list[str], target_app_path: str) -> list[str]:
     allowed_prefix = target_app_path.rstrip("/") + "/"
-    allowed_agent_prefix = ".codex/agents/"
+    allowed_automation_paths = (".codex/", ".bugfix-automation-bin/", ".bugfix-automation-hooks/")
     return [
         path
         for path in paths
         if path != target_app_path.rstrip("/")
         and not path.startswith(allowed_prefix)
-        and not path.startswith(allowed_agent_prefix)
+        and not path.startswith(allowed_automation_paths)
     ]
 
 

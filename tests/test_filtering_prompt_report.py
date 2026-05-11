@@ -128,6 +128,9 @@ class FilteringPromptReportTest(unittest.TestCase):
         changed = [
             "apps/pc-web/src/app/page.tsx",
             ".codex/agents/frontend-fix-agent.toml",
+            ".codex/",
+            ".bugfix-automation-bin/",
+            ".bugfix-automation-hooks/",
             "apps/server/src/main.java",
         ]
 
