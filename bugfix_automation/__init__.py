@@ -1,2 +1,1 @@
-"""Nightly frontend bugfix automation."""
-
+"""夜间前端 bug 自动修复工具。"""

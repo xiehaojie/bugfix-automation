@@ -18,7 +18,7 @@ class WorktreeTest(unittest.TestCase):
 
             content = wrapper.read_text(encoding="utf-8")
 
-        self.assertIn("git push is disabled", content)
+        self.assertIn("自动修复流程已禁止 git push", content)
         self.assertIn('if [ "$1" = "push" ]', content)
 
 if __name__ == "__main__":

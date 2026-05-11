@@ -115,7 +115,7 @@ class FilteringPromptReportTest(unittest.TestCase):
 
         self.assertEqual(data["results"][0]["issue_id"], "87")
         self.assertIn("fix/bug-87-demo", markdown)
-        self.assertIn("Morning Approval Report", approval)
+        self.assertIn("早上审批报告", approval)
         self.assertIn("一级分类: `个人空间`", approval)
         self.assertIn("二级分类: `文件上传交互`", approval)
         self.assertIn("问题描述: 页面反馈不明显", approval)
@@ -142,7 +142,7 @@ class FilteringPromptReportTest(unittest.TestCase):
         self.assertEqual(out_of_scope_paths(changed, "apps/pc-web"), ["apps/server/src/main.java"])
 
     def test_assert_scope_clean_raises_for_out_of_scope_paths(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "Out-of-scope changes detected"):
+        with self.assertRaisesRegex(RuntimeError, "检测到超出前端范围的改动"):
             assert_scope_clean(["apps/pc-web/src/app/page.tsx", "packages/shared/index.ts"], "apps/pc-web")
 
     def test_codex_command_uses_workspace_sandbox_and_never_approval(self) -> None:

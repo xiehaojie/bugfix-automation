@@ -10,9 +10,9 @@ def ensure_worktree(target_repo: Path, worktree_root: Path, branch: str) -> Path
     worktree_root.mkdir(parents=True, exist_ok=True)
     path = worktree_path_for_branch(worktree_root, branch)
     if path.exists():
-        raise FileExistsError(f"Worktree already exists: {path}")
+        raise FileExistsError(f"worktree 已存在：{path}")
     if branch_exists(target_repo, branch):
-        raise FileExistsError(f"Branch already exists: {branch}")
+        raise FileExistsError(f"分支已存在：{branch}")
     subprocess.run(["git", "worktree", "add", str(path), "-b", branch], cwd=target_repo, check=True)
     return path
 
@@ -97,7 +97,7 @@ def create_no_push_git_wrapper(worktree_path: Path) -> Path:
     wrapper.write_text(
         f"""#!/bin/sh
 if [ "$1" = "push" ]; then
-  echo "git push is disabled by bugfix automation" >&2
+  echo "自动修复流程已禁止 git push" >&2
   exit 1
 fi
 exec "{real_git}" "$@"

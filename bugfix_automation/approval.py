@@ -60,7 +60,7 @@ def approve_fix(config: Config, branch: str) -> str:
     fix = _find_fix(config, branch)
     changed_files = tracked_changed_files(fix.path, config.target_app_path)
     if not changed_files:
-        raise RuntimeError("No pc-web changes to approve")
+        raise RuntimeError("没有可审批的 pc-web 改动")
     message = f"fix(pc-web): {branch.removeprefix('fix/')}"
     return commit_all(fix.path, message)
 
@@ -74,18 +74,18 @@ def reject_fix(config: Config, branch: str) -> None:
 def render_dashboard(config: Config) -> str:
     items = load_fix_items(config)
     pending_count = count_pending(items)
-    cards = "\n".join(_render_card(item) for item in items) or '<p class="muted">当前没有 fix worktree。</p>'
+    cards = "\n".join(_render_card(item) for item in items) or '<p class="muted">当前没有待审批的 fix 工作目录。</p>'
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <title>Bugfix 审批台</title>
+  <title>Bug 修复审批台</title>
   <style>{_css()}</style>
 </head>
 <body>
   <header>
     <div>
-      <h1>Bugfix 审批台</h1>
+      <h1>Bug 修复审批台</h1>
       <p>当前有 <strong>{pending_count}</strong> 个修改待处理</p>
     </div>
     <a class="button secondary" href="/">刷新</a>
@@ -128,7 +128,7 @@ def serve(config: Config, host: str = "127.0.0.1", port: int = 8765) -> None:
                 elif parsed.path == "/reject":
                     reject_fix(config, branch)
                 else:
-                    raise RuntimeError("Unknown action")
+                    raise RuntimeError("未知操作")
                 self.send_response(303)
                 self.send_header("Location", "/")
                 self.end_headers()
@@ -172,7 +172,7 @@ def _render_card(item: dict[str, Any]) -> str:
   </div>
   <h3>改动文件</h3>
   <ul>{changed}</ul>
-  <h3>GitHub 风格 Diff</h3>
+  <h3>类似 GitHub 的代码比对</h3>
   {diff_to_html(item["diff"])}
 </section>"""
 
@@ -181,7 +181,7 @@ def _find_fix(config: Config, branch: str) -> FixWorktree:
     for fix in parse_worktree_list(_git(config.target_repo, ["worktree", "list", "--porcelain"])):
         if fix.branch == branch:
             return fix
-    raise RuntimeError(f"Fix branch not found: {branch}")
+    raise RuntimeError(f"没有找到修复分支: {branch}")
 
 
 def _git(cwd: Path, args: list[str]) -> str:

@@ -41,7 +41,7 @@ def run_once(config: Config, dry_run: bool = False) -> tuple[Path, Path, Path]:
         branch = make_branch_name(bug)
         image_paths = export_bug_images(config.excel_path, bug, run_dir / "images" / branch.replace("/", "-"))
         if dry_run:
-            results.append(_result(bug, "dry-run", branch, "Matched filters; no worktree or Codex invocation.", image_paths))
+            results.append(_result(bug, "dry-run", branch, "命中筛选规则；演练模式未创建 worktree，也未启动 Codex。", image_paths))
             continue
         results.append(process_bug(config, bug, branch, image_paths))
     return write_reports(run_dir, results)
@@ -53,7 +53,7 @@ def run_one(config: Config, issue_id: str | None = None, excel_row: int | None =
     branch = make_branch_name(bug)
     image_paths = export_bug_images(config.excel_path, bug, run_dir / "images" / branch.replace("/", "-"))
     if dry_run:
-        result = _result(bug, "dry-run", branch, "Matched filters; single-bug dry-run only.", image_paths)
+        result = _result(bug, "dry-run", branch, "命中筛选规则；单条演练模式只导出截图和报告。", image_paths)
     else:
         result = process_bug(config, bug, branch, image_paths)
     return write_bug_results(run_dir, [result])
@@ -61,7 +61,7 @@ def run_one(config: Config, issue_id: str | None = None, excel_row: int | None =
 
 def select_one_bug(bugs: list[BugRecord], issue_id: str | None, excel_row: int | None) -> BugRecord:
     if not issue_id and excel_row is None:
-        raise ValueError("Provide either issue_id or excel_row")
+        raise ValueError("请提供 issue_id 或 excel_row")
     matches = [
         bug
         for bug in bugs
@@ -69,9 +69,9 @@ def select_one_bug(bugs: list[BugRecord], issue_id: str | None, excel_row: int |
         or (excel_row is not None and bug.excel_row == excel_row)
     ]
     if not matches:
-        raise ValueError("No matching bug found in filtered bug list")
+        raise ValueError("在筛选后的 bug 列表中没有找到匹配项")
     if len(matches) > 1:
-        raise ValueError("Multiple matching bugs found; use --row for an exact Excel row")
+        raise ValueError("找到多条匹配 bug；请使用 --row 指定精确的 Excel 行号")
     return matches[0]
 
 
@@ -84,12 +84,12 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
     try:
         existing_path = worktree_path_for_branch(config.worktree_root, branch)
         if existing_path.exists():
-            return _result(bug, "skipped", branch, f"Worktree already exists: {existing_path}", image_paths)
+            return _result(bug, "skipped", branch, f"worktree 已存在：{existing_path}", image_paths)
         existing_branch_path = branch_worktree_path(config.target_repo, branch)
         if existing_branch_path is not None:
-            return _result(bug, "skipped", branch, f"Branch already checked out at: {existing_branch_path}", image_paths)
+            return _result(bug, "skipped", branch, f"分支已经在这个 worktree 中检出：{existing_branch_path}", image_paths)
         if branch_exists(config.target_repo, branch):
-            return _result(bug, "skipped", branch, "Branch already exists in target repository.", image_paths)
+            return _result(bug, "skipped", branch, "目标仓库中已存在同名分支。", image_paths)
         worktree_path = ensure_worktree(config.target_repo, config.worktree_root, branch)
         install_project_agents(worktree_path, Path(__file__).resolve().parents[1])
         git_wrapper_dir = create_no_push_git_wrapper(worktree_path)
@@ -99,7 +99,7 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
         _verify_frontend(worktree_path, config.target_app_path)
         assert_scope_clean(changed_paths(worktree_path), config.target_app_path)
         if not has_app_changes(worktree_path, config.target_app_path):
-            return _result(bug, "no-change", branch, "Codex finished without local changes.", image_paths)
+            return _result(bug, "no-change", branch, "Codex 已结束，但没有产生本地改动。", image_paths)
         changed_files = tracked_changed_files(worktree_path, config.target_app_path)
         commit = commit_all(worktree_path, _commit_message(bug))
         stat = diff_stat(worktree_path, f"{commit}~1", commit)
@@ -107,7 +107,7 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
             bug,
             "committed",
             branch,
-            f"Committed locally in {worktree_path}.",
+            f"已在本地 worktree 提交：{worktree_path}。",
             image_paths,
             commit=commit,
             changed_files=changed_files,
@@ -138,7 +138,7 @@ def codex_command(codex_bin: str, worktree_path: str, prompt: str, image_paths: 
 def assert_scope_clean(paths: list[str], target_app_path: str) -> None:
     unsafe_paths = out_of_scope_paths(paths, target_app_path)
     if unsafe_paths:
-        raise RuntimeError(f"Out-of-scope changes detected: {', '.join(unsafe_paths)}")
+        raise RuntimeError(f"检测到超出前端范围的改动：{', '.join(unsafe_paths)}")
 
 
 def _verify_frontend(worktree_path: Path, target_app_path: str) -> None:
@@ -156,7 +156,7 @@ def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_t
 
 def _commit_message(bug: BugRecord) -> str:
     summary = bug.description.splitlines()[0][:60] or f"bug {bug.issue_id}"
-    return f"fix(pc-web): {summary}\n\nExcel row: {bug.excel_row}\nIssue: {bug.issue_id}\nSource: {bug.source_system}"
+    return f"fix(pc-web): {summary}\n\nExcel 行号: {bug.excel_row}\nBug 序号: {bug.issue_id}\n来源系统: {bug.source_system}"
 
 
 def _result(

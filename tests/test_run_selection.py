@@ -26,7 +26,7 @@ class RunSelectionTest(unittest.TestCase):
         self.assertEqual(bug.issue_id, "1")
 
     def test_select_one_bug_requires_exact_match(self) -> None:
-        with self.assertRaisesRegex(ValueError, "No matching bug"):
+        with self.assertRaisesRegex(ValueError, "没有找到匹配项"):
             select_one_bug(self.bugs, issue_id="999", excel_row=None)
 
     def test_write_bug_results_writes_single_bug_report(self) -> None:
@@ -49,7 +49,7 @@ class RunSelectionTest(unittest.TestCase):
             self.assertTrue(json_path.exists())
             self.assertTrue(md_path.exists())
 
-        self.assertIn("Bug 1 - row 46", approval)
+        self.assertIn("Bug 1 - Excel 第 46 行", approval)
 
 
 if __name__ == "__main__":

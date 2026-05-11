@@ -11,20 +11,20 @@ from bugfix_automation.approval import serve
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Nightly frontend bugfix automation")
+    parser = argparse.ArgumentParser(description="夜间前端 bug 自动修复工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    list_parser = subparsers.add_parser("list", help="List matching bugs")
-    list_parser.add_argument("--dry-run", action="store_true", help="Also write a dry-run report")
-    one_parser = subparsers.add_parser("run-one", help="Run one filtered bug by Excel row or issue id")
+    list_parser = subparsers.add_parser("list", help="列出符合筛选规则的 bug")
+    list_parser.add_argument("--dry-run", action="store_true", help="只生成演练报告，不启动 Codex")
+    one_parser = subparsers.add_parser("run-one", help="按 Excel 行号或 bug 序号运行一条")
     selector = one_parser.add_mutually_exclusive_group(required=True)
-    selector.add_argument("--issue-id", help="Bug issue id from the 序号 column")
-    selector.add_argument("--row", type=int, help="Excel row number")
-    one_parser.add_argument("--dry-run", action="store_true", help="Only export images and reports; do not invoke Codex")
-    subparsers.add_parser("run-once", help="Run the full automation once")
-    approval_parser = subparsers.add_parser("approval-server", help="Start the local visual approval console")
+    selector.add_argument("--issue-id", help="Excel `序号` 列中的 bug 序号")
+    selector.add_argument("--row", type=int, help="Excel 行号")
+    one_parser.add_argument("--dry-run", action="store_true", help="只导出截图和报告，不启动 Codex")
+    subparsers.add_parser("run-once", help="运行本次筛选出的全部 bug")
+    approval_parser = subparsers.add_parser("approval-server", help="启动本地可视化审批台")
     approval_parser.add_argument("--host", default="127.0.0.1")
     approval_parser.add_argument("--port", type=int, default=8765)
-    subparsers.add_parser("install-launchd", help="Install the daily 22:00 LaunchAgent")
+    subparsers.add_parser("install-launchd", help="安装每天 22:00 的 macOS 定时任务")
     args = parser.parse_args()
 
     config = load_config()
@@ -47,30 +47,30 @@ def main() -> int:
         ], ensure_ascii=False, indent=2))
         if args.dry_run:
             json_path, md_path, approval_path = run_once(config, dry_run=True)
-            print(f"Dry-run report: {json_path}")
-            print(f"Dry-run markdown: {md_path}")
-            print(f"Dry-run approval: {approval_path}")
+            print(f"演练 JSON 报告: {json_path}")
+            print(f"演练 Markdown 报告: {md_path}")
+            print(f"演练审批报告: {approval_path}")
         return 0
     if args.command == "run-once":
         json_path, md_path, approval_path = run_once(config)
-        print(f"Report: {json_path}")
-        print(f"Markdown: {md_path}")
-        print(f"Approval: {approval_path}")
+        print(f"JSON 报告: {json_path}")
+        print(f"Markdown 报告: {md_path}")
+        print(f"审批报告: {approval_path}")
         return 0
     if args.command == "run-one":
         json_path, md_path, approval_path = run_one(config, issue_id=args.issue_id, excel_row=args.row, dry_run=args.dry_run)
-        print(f"Report: {json_path}")
-        print(f"Markdown: {md_path}")
-        print(f"Approval: {approval_path}")
+        print(f"JSON 报告: {json_path}")
+        print(f"Markdown 报告: {md_path}")
+        print(f"审批报告: {approval_path}")
         return 0
     if args.command == "install-launchd":
         path = install_launchd(config)
-        print(f"Installed LaunchAgent: {path}")
+        print(f"已安装定时任务: {path}")
         return 0
     if args.command == "approval-server":
         serve(config, host=args.host, port=args.port)
         return 0
-    parser.error("Unknown command")
+    parser.error("未知命令")
     return 2
 
 

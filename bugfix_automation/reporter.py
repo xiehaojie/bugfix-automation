@@ -31,7 +31,7 @@ def conflict_index(results: list[dict[str, Any]]) -> dict[str, list[str]]:
 
 
 def _markdown(results: list[dict[str, Any]], conflicts: dict[str, list[str]]) -> str:
-    lines = ["# Nightly Bugfix Automation Report", "", "| Issue | Status | Branch | Images | Detail |", "| --- | --- | --- | --- | --- |"]
+    lines = ["# 夜间 Bug 自动修复报告", "", "| 序号 | 状态 | 分支 | 截图 | 说明 |", "| --- | --- | --- | --- | --- |"]
     for result in results:
         images = "<br>".join(result.get("images", []))
         lines.append(
@@ -39,37 +39,37 @@ def _markdown(results: list[dict[str, Any]], conflicts: dict[str, list[str]]) ->
         )
     lines.append("")
     if conflicts:
-        lines.extend(["## Conflict Risks", ""])
+        lines.extend(["## 冲突风险", ""])
         for file_path, issues in conflicts.items():
-            lines.append(f"- `{file_path}` touched by issues: {', '.join(issues)}")
+            lines.append(f"- `{file_path}` 被这些 bug 修改：{', '.join(issues)}")
         lines.append("")
     return "\n".join(lines)
 
 
 def _approval_markdown(results: list[dict[str, Any]], conflicts: dict[str, list[str]]) -> str:
     lines = [
-        "# Morning Approval Report",
+        "# 早上审批报告",
         "",
-        "Review these local branches before deciding which pc-web fixes to merge or cherry-pick. No branch has been pushed.",
+        "请先审查这些本地分支，再决定哪些 pc-web 修复可以提交。当前没有任何分支被 push。",
         "",
     ]
     if conflicts:
-        lines.extend(["## Conflict Risks", ""])
+        lines.extend(["## 冲突风险", ""])
         for file_path, issues in conflicts.items():
-            lines.append(f"- `{file_path}` is modified by bug(s): {', '.join(issues)}")
+            lines.append(f"- `{file_path}` 被这些 bug 修改：{', '.join(issues)}")
         lines.append("")
     else:
-        lines.extend(["## Conflict Risks", "", "No committed fixes modify the same file.", ""])
+        lines.extend(["## 冲突风险", "", "没有发现多个已提交修复修改同一个文件。", ""])
 
     for result in results:
         lines.extend(
             [
-                f"## Bug {result.get('issue_id', '')} - row {result.get('excel_row', '')}",
+                f"## Bug {result.get('issue_id', '')} - Excel 第 {result.get('excel_row', '')} 行",
                 "",
-                f"- Status: `{result.get('status', '')}`",
-                f"- Branch: `{result.get('branch', '')}`",
-                f"- Commit: `{result.get('commit', '')}`",
-                f"- Source: `{result.get('source_system', '')}`",
+                f"- 状态: `{result.get('status', '')}`",
+                f"- 分支: `{result.get('branch', '')}`",
+                f"- 提交: `{result.get('commit', '')}`",
+                f"- 来源系统: `{result.get('source_system', '')}`",
                 f"- 一级分类: `{result.get('primary_category', '')}`",
                 f"- 二级分类: `{result.get('secondary_category', '')}`",
                 f"- 优先级: `{result.get('priority', '')}`",
@@ -82,16 +82,16 @@ def _approval_markdown(results: list[dict[str, Any]], conflicts: dict[str, list[
                 f"- 问题描述: {result.get('description', '')}",
                 f"- 备注: {result.get('remark', '')}",
                 f"- 备注2: {result.get('remark2', '')}",
-                f"- Detail: {result.get('detail', '')}",
-                "- Images:",
+                f"- 说明: {result.get('detail', '')}",
+                "- 截图:",
             ]
         )
         images = result.get("images", [])
-        lines.extend([f"  - `{image}`" for image in images] or ["  - None"])
-        lines.append("- Changed files:")
-        lines.extend([f"  - `{file_path}`" for file_path in result.get("changed_files", [])] or ["  - None"])
+        lines.extend([f"  - `{image}`" for image in images] or ["  - 无"])
+        lines.append("- 修改文件:")
+        lines.extend([f"  - `{file_path}`" for file_path in result.get("changed_files", [])] or ["  - 无"])
         diff = result.get("diff_stat", "")
         if diff:
-            lines.extend(["- Diff stat:", "", "```", diff, "```"])
+            lines.extend(["- Diff 统计:", "", "```", diff, "```"])
         lines.append("")
     return "\n".join(lines)
