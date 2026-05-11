@@ -31,7 +31,13 @@ class FilteringPromptReportTest(unittest.TestCase):
         rows = [{"_excel_row": "2", "序号": "87", "提出人状态": "处理中", "来源系统": "小亦PC", "对接人": "谢浩杰", "对接人状态": "", "问题描述": "账号离线状态异常 / app"}]
         bug = filter_bugs(rows, assignee="谢浩杰")[0]
 
-        self.assertEqual(make_branch_name(bug), "fix/bug-87-zhang-hao-li-xian-zhuang-tai-yi-chang-app")
+        self.assertEqual(make_branch_name(bug), "fix/87-账号离线状态异常app")
+
+    def test_make_branch_name_uses_chinese_summary_for_current_bug(self) -> None:
+        rows = [{"_excel_row": "46", "序号": "1", "提出人状态": "待处理", "来源系统": "小亦PC", "对接人": "谢浩杰", "对接人状态": "处理中", "问题描述": "在个人空间上传附件后，页面反馈不够明显，没有进度展示；另外页面为空状态时，把页面中间“暂无上传文件”上面的上传icon去掉"}]
+        bug = filter_bugs(rows, assignee="谢浩杰")[0]
+
+        self.assertEqual(make_branch_name(bug), "fix/1-个人空间上传附件页面反馈不够明显")
 
     def test_prompt_restricts_scope_and_remote_behavior(self) -> None:
         bug = filter_bugs([

@@ -59,6 +59,14 @@ Run one filtered bug by issue id and invoke Codex:
 python3 -m bugfix_automation.cli run-one --issue-id 1
 ```
 
+Open the visual approval console:
+
+```bash
+python3 -m bugfix_automation.cli approval-server
+```
+
+Then open `http://127.0.0.1:8765`. The console prints how many pending pc-web changes exist when it starts, and the page shows each local `fix/*` worktree with a GitHub-style diff and approve/reject actions.
+
 Install the macOS user LaunchAgent:
 
 ```bash
@@ -104,3 +112,5 @@ The next morning, open `runs/YYYY-MM-DD/approval.md`. It lists each bug with:
 - conflict risks when two or more committed bug branches touched the same file
 
 The automation does not merge fixes into your main pc-web branch. Each bug is isolated in its own worktree and branch, so multiple bugs can modify the same file overnight without overwriting each other. If `approval.md` reports a conflict risk, review and merge or cherry-pick those branches one at a time.
+
+You can also use the local approval console instead of reading Markdown. It only stages `apps/pc-web` paths when approving a fix.

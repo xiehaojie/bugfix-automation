@@ -66,10 +66,8 @@ def filter_bugs(rows: list[dict[str, str]], assignee: str) -> list[BugRecord]:
 
 
 def make_branch_name(bug: BugRecord) -> str:
-    slug = _slugify(bug.description)[:70].strip("-")
-    if not slug:
-        slug = f"row-{bug.excel_row}"
-    return f"fix/bug-{bug.issue_id}-{slug}"
+    summary = _chinese_summary(bug.description) or _slugify(bug.secondary_category or bug.primary_category) or f"row-{bug.excel_row}"
+    return f"fix/{bug.issue_id}-{summary}"
 
 
 def _clean(value: str | None) -> str:
@@ -112,3 +110,22 @@ def _slugify(value: str) -> str:
         else:
             parts.append("-")
     return re.sub(r"-+", "-", "".join(parts)).strip("-")
+
+
+def _chinese_summary(value: str) -> str:
+    text = unicodedata.normalize("NFKC", value)
+    text = re.split(r"[；;。]", text, maxsplit=1)[0]
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"[，。；;,.、/\\（）()【】\[\]「」“”\"'：:\s]+", "", text)
+    text = text.replace("在", "", 1)
+    text = text.replace("后", "")
+    text = text.replace("另外", "")
+    text = text.replace("建议", "")
+    text = text.replace("目前", "")
+    text = text.replace("页面中间", "")
+    text = text.replace("暂无上传文件", "")
+    text = text.replace("上面的", "")
+    text = text.replace("或者", "")
+    text = text.replace("点击", "")
+    text = re.split(r"没有|需|建议", text, maxsplit=1)[0]
+    return text[:18]

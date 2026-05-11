@@ -7,6 +7,7 @@ from bugfix_automation.config import load_config
 from bugfix_automation.filtering import make_branch_name
 from bugfix_automation.runner import list_bugs, run_once, run_one
 from bugfix_automation.scheduler import install_launchd
+from bugfix_automation.approval import serve
 
 
 def main() -> int:
@@ -20,6 +21,9 @@ def main() -> int:
     selector.add_argument("--row", type=int, help="Excel row number")
     one_parser.add_argument("--dry-run", action="store_true", help="Only export images and reports; do not invoke Codex")
     subparsers.add_parser("run-once", help="Run the full automation once")
+    approval_parser = subparsers.add_parser("approval-server", help="Start the local visual approval console")
+    approval_parser.add_argument("--host", default="127.0.0.1")
+    approval_parser.add_argument("--port", type=int, default=8765)
     subparsers.add_parser("install-launchd", help="Install the daily 22:00 LaunchAgent")
     args = parser.parse_args()
 
@@ -62,6 +66,9 @@ def main() -> int:
     if args.command == "install-launchd":
         path = install_launchd(config)
         print(f"Installed LaunchAgent: {path}")
+        return 0
+    if args.command == "approval-server":
+        serve(config, host=args.host, port=args.port)
         return 0
     parser.error("Unknown command")
     return 2
