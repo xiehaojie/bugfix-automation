@@ -52,6 +52,18 @@ def has_app_changes(path: Path, target_app_path: str) -> bool:
     return bool(result.stdout.strip())
 
 
+def tracked_changed_files(path: Path, target_app_path: str) -> list[str]:
+    result = subprocess.run(["git", "status", "--porcelain", "--", target_app_path], cwd=path, text=True, capture_output=True, check=True)
+    files: list[str] = []
+    for line in result.stdout.splitlines():
+        raw_path = line[3:]
+        if " -> " in raw_path:
+            raw_path = raw_path.split(" -> ", 1)[1]
+        if raw_path:
+            files.append(raw_path)
+    return sorted(files)
+
+
 def changed_paths(path: Path) -> list[str]:
     result = subprocess.run(["git", "status", "--porcelain"], cwd=path, text=True, capture_output=True, check=True)
     paths: list[str] = []
@@ -118,6 +130,17 @@ exit 1
     return hook
 
 
-def commit_all(path: Path, message: str) -> None:
+def commit_all(path: Path, message: str) -> str:
     subprocess.run(["git", "add", "apps/pc-web"], cwd=path, check=True)
     subprocess.run(["git", "commit", "-m", message], cwd=path, check=True)
+    return head_sha(path)
+
+
+def head_sha(path: Path) -> str:
+    result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=path, text=True, capture_output=True, check=True)
+    return result.stdout.strip()
+
+
+def diff_stat(path: Path, base: str, head: str) -> str:
+    result = subprocess.run(["git", "diff", "--stat", base, head, "--", "apps/pc-web"], cwd=path, text=True, capture_output=True, check=True)
+    return result.stdout.strip()

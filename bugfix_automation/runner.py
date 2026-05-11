@@ -24,6 +24,8 @@ from bugfix_automation.worktree import (
     branch_exists,
     branch_worktree_path,
     worktree_path_for_branch,
+    tracked_changed_files,
+    diff_stat,
 )
 
 
@@ -32,7 +34,7 @@ def list_bugs(config: Config) -> list[BugRecord]:
     return filter_bugs(rows, config.assignee)
 
 
-def run_once(config: Config, dry_run: bool = False) -> tuple[Path, Path]:
+def run_once(config: Config, dry_run: bool = False) -> tuple[Path, Path, Path]:
     bugs = list_bugs(config)
     run_dir = config.runs_root / date.today().isoformat()
     results: list[dict[str, Any]] = []
@@ -68,8 +70,19 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
         assert_scope_clean(changed_paths(worktree_path), config.target_app_path)
         if not has_app_changes(worktree_path, config.target_app_path):
             return _result(bug, "no-change", branch, "Codex finished without local changes.", image_paths)
-        commit_all(worktree_path, _commit_message(bug))
-        return _result(bug, "committed", branch, f"Committed locally in {worktree_path}.", image_paths)
+        changed_files = tracked_changed_files(worktree_path, config.target_app_path)
+        commit = commit_all(worktree_path, _commit_message(bug))
+        stat = diff_stat(worktree_path, f"{commit}~1", commit)
+        return _result(
+            bug,
+            "committed",
+            branch,
+            f"Committed locally in {worktree_path}.",
+            image_paths,
+            commit=commit,
+            changed_files=changed_files,
+            diff_stat_text=stat,
+        )
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}"
         if worktree_path is not None:
@@ -118,13 +131,25 @@ def _commit_message(bug: BugRecord) -> str:
     return f"fix(pc-web): {summary}\n\nExcel row: {bug.excel_row}\nIssue: {bug.issue_id}\nSource: {bug.source_system}"
 
 
-def _result(bug: BugRecord, status: str, branch: str, detail: str, image_paths: list[Path] | None = None) -> dict[str, Any]:
+def _result(
+    bug: BugRecord,
+    status: str,
+    branch: str,
+    detail: str,
+    image_paths: list[Path] | None = None,
+    commit: str = "",
+    changed_files: list[str] | None = None,
+    diff_stat_text: str = "",
+) -> dict[str, Any]:
     return {
         "excel_row": bug.excel_row,
         "issue_id": bug.issue_id,
         "source_system": bug.source_system,
         "status": status,
         "branch": branch,
+        "commit": commit,
+        "changed_files": changed_files or [],
+        "diff_stat": diff_stat_text,
         "detail": detail,
         "images": [str(path) for path in image_paths or []],
     }

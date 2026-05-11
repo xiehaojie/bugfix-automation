@@ -70,6 +70,7 @@ Each run writes:
 
 - `runs/YYYY-MM-DD/report.json`
 - `runs/YYYY-MM-DD/report.md`
+- `runs/YYYY-MM-DD/approval.md`
 - `runs/YYYY-MM-DD/images/<branch>/...`
 
 Successful bug fixes are committed locally in the target monorepo worktree branch named like `fix/bug-87-...`.
@@ -77,3 +78,17 @@ Successful bug fixes are committed locally in the target monorepo worktree branc
 The runner copies this repository's `.codex/agents/*.toml` files into each temporary business worktree before invoking Codex, so project-level subagents are available during the fix. Those copied files are not committed; only `apps/pc-web` changes are staged.
 
 If a branch or worktree already exists, the run skips that row and records the existing path or branch instead of overwriting it.
+
+## Morning Approval
+
+The next morning, open `runs/YYYY-MM-DD/approval.md`. It lists each bug with:
+
+- Excel row and issue id
+- local `fix/*` branch
+- local commit hash
+- screenshot paths
+- changed `apps/pc-web` files
+- diff stat
+- conflict risks when two or more committed bug branches touched the same file
+
+The automation does not merge fixes into your main pc-web branch. Each bug is isolated in its own worktree and branch, so multiple bugs can modify the same file overnight without overwriting each other. If `approval.md` reports a conflict risk, review and merge or cherry-pick those branches one at a time.

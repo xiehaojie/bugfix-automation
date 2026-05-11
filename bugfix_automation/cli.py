@@ -23,14 +23,16 @@ def main() -> int:
         bugs = list_bugs(config)
         print(json.dumps([{"issue_id": bug.issue_id, "row": bug.excel_row, "branch": make_branch_name(bug), "description": bug.description} for bug in bugs], ensure_ascii=False, indent=2))
         if args.dry_run:
-            json_path, md_path = run_once(config, dry_run=True)
+            json_path, md_path, approval_path = run_once(config, dry_run=True)
             print(f"Dry-run report: {json_path}")
             print(f"Dry-run markdown: {md_path}")
+            print(f"Dry-run approval: {approval_path}")
         return 0
     if args.command == "run-once":
-        json_path, md_path = run_once(config)
+        json_path, md_path, approval_path = run_once(config)
         print(f"Report: {json_path}")
         print(f"Markdown: {md_path}")
+        print(f"Approval: {approval_path}")
         return 0
     if args.command == "install-launchd":
         path = install_launchd(config)

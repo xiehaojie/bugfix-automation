@@ -5,7 +5,7 @@ from pathlib import Path
 
 from bugfix_automation.filtering import filter_bugs, make_branch_name
 from bugfix_automation.prompt import render_codex_prompt
-from bugfix_automation.reporter import write_reports
+from bugfix_automation.reporter import conflict_index, write_reports
 from bugfix_automation.runner import assert_scope_clean, codex_command
 from bugfix_automation.worktree import out_of_scope_paths
 
@@ -51,13 +51,24 @@ class FilteringPromptReportTest(unittest.TestCase):
     def test_write_reports_creates_json_and_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
-            json_path, md_path = write_reports(output, [{"issue_id": "87", "status": "dry-run", "branch": "fix/bug-87-demo"}])
+            json_path, md_path, approval_path = write_reports(output, [{"issue_id": "87", "status": "dry-run", "branch": "fix/bug-87-demo"}])
 
             data = json.loads(json_path.read_text(encoding="utf-8"))
             markdown = md_path.read_text(encoding="utf-8")
+            approval = approval_path.read_text(encoding="utf-8")
 
         self.assertEqual(data["results"][0]["issue_id"], "87")
         self.assertIn("fix/bug-87-demo", markdown)
+        self.assertIn("Morning Approval Report", approval)
+
+    def test_conflict_index_detects_multiple_bugs_touching_same_file(self) -> None:
+        conflicts = conflict_index([
+            {"issue_id": "87", "status": "committed", "changed_files": ["apps/pc-web/src/a.tsx"]},
+            {"issue_id": "88", "status": "committed", "changed_files": ["apps/pc-web/src/a.tsx", "apps/pc-web/src/b.tsx"]},
+            {"issue_id": "89", "status": "failed", "changed_files": ["apps/pc-web/src/a.tsx"]},
+        ])
+
+        self.assertEqual(conflicts, {"apps/pc-web/src/a.tsx": ["87", "88"]})
 
     def test_out_of_scope_paths_rejects_backend_and_allows_agent_files(self) -> None:
         changed = [
