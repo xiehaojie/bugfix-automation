@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 
 from bugfix_automation.approval import approve_fix, count_pending, diff_to_html, parse_worktree_list
+from bugfix_automation.approval_api import _bug_payload
 from bugfix_automation.config import Config
 
 
@@ -90,6 +91,39 @@ branch refs/heads/feature/demo
             self.assertFalse(worktree.exists())
             branch_check = subprocess.run(["git", "rev-parse", "--verify", "fix/1-demo"], cwd=repo, capture_output=True)
             self.assertEqual(branch_check.returncode, 0)
+
+    def test_bug_payload_contains_filtered_excel_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = Config(
+                excel_path=root / "bugs.xlsx",
+                sheet_name="Sheet1",
+                assignee="谢浩杰",
+                target_repo=root / "repo",
+                target_app_path="apps/pc-web",
+                worktree_root=root / "worktrees",
+                runs_root=root / "runs",
+                logs_root=root / "logs",
+                launchd_label="local.test",
+                codex_bin="codex",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+            )
+            rows = [
+                {"_excel_row": "46", "序号": "1", "提出人状态": "待处理", "来源系统": "小亦PC", "对接人": "谢浩杰", "对接人状态": "处理中", "一级分类": "个人空间", "二级分类": "上传", "问题描述": "上传反馈不明显", "备注": "补充备注"},
+                {"_excel_row": "47", "序号": "2", "提出人状态": "待处理", "来源系统": "后台", "对接人": "谢浩杰", "对接人状态": "处理中", "问题描述": "跳过"},
+            ]
+            with unittest.mock.patch("bugfix_automation.runner.read_sheet", return_value=rows):
+                bugs = _bug_payload(config)
+
+        self.assertEqual(len(bugs), 1)
+        self.assertEqual(bugs[0]["issue_id"], "1")
+        self.assertEqual(bugs[0]["excel_row"], 46)
+        self.assertEqual(bugs[0]["primary_category"], "个人空间")
+        self.assertEqual(bugs[0]["remark"], "补充备注")
+        self.assertEqual(bugs[0]["branch"], "fix/1-上传反馈不明显")
 
 
 if __name__ == "__main__":

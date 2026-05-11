@@ -99,6 +99,10 @@ button, textarea {
   font-size: 12px;
 }
 
+.metricWide {
+  grid-column: 1 / -1;
+}
+
 .toolButton, .branchButton {
   width: 100%;
   border: 0;
@@ -270,6 +274,26 @@ button, textarea {
   border-bottom: 1px solid var(--line);
 }
 
+.panelTitle.spread {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panelTitle.spread > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panelTitle.spread > span {
+  max-width: 58%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .panelTitle h3 {
   margin: 0;
   font-size: 14px;
@@ -293,6 +317,93 @@ button, textarea {
 .fileList span, .noDiff {
   color: var(--muted);
   font-size: 13px;
+}
+
+.excelPanel {
+  margin-bottom: 16px;
+}
+
+.excelTableWrap {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.excelTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.excelTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-soft);
+  color: var(--muted);
+  text-align: left;
+  font-weight: 800;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+}
+
+.excelTable td {
+  vertical-align: top;
+  border-bottom: 1px solid #edf1f5;
+  padding: 10px 12px;
+  color: var(--text);
+}
+
+.excelTable th:nth-child(1), .excelTable td:nth-child(1) { width: 58px; }
+.excelTable th:nth-child(2), .excelTable td:nth-child(2) { width: 72px; }
+.excelTable th:nth-child(3), .excelTable td:nth-child(3) { width: 76px; }
+.excelTable th:nth-child(4), .excelTable td:nth-child(4) { width: 150px; }
+.excelTable th:nth-child(5), .excelTable td:nth-child(5) { width: 96px; }
+.excelTable th:nth-child(6), .excelTable td:nth-child(6) { width: 96px; }
+.excelTable th:nth-child(8), .excelTable td:nth-child(8) { width: 220px; }
+
+.categoryCell, .descriptionCell, .remarkCell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.categoryCell span, .descriptionCell span, .remarkCell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.categoryCell small, .descriptionCell small, .remarkCell small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.badge.green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.badge.blue {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.badge.gray {
+  background: #eef2f7;
+  color: var(--muted);
 }
 
 .rework {

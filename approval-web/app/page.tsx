@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock3,
   Code2,
+  Database,
   FileText,
   GitBranch,
   ImagePlus,
@@ -30,6 +31,29 @@ type DashboardPayload = {
   items: FixItem[];
 };
 
+type BugItem = {
+  issue_id: string;
+  excel_row: number;
+  branch: string;
+  source_system: string;
+  priority: string;
+  primary_category: string;
+  secondary_category: string;
+  requester: string;
+  request_date: string;
+  requester_status: string;
+  assignee: string;
+  assignee_status: string;
+  resolved_date: string;
+  description: string;
+  remark: string;
+  remark2: string;
+};
+
+type BugsPayload = {
+  bugs: BugItem[];
+};
+
 type ConfigPayload = {
   target_repo: string;
   target_app_path: string;
@@ -47,6 +71,7 @@ const splitLines = (value: string) =>
 
 export default function ApprovalPage() {
   const [payload, setPayload] = useState<DashboardPayload>({ pending_count: 0, items: [] });
+  const [bugsPayload, setBugsPayload] = useState<BugsPayload>({ bugs: [] });
   const [config, setConfig] = useState<ConfigPayload | null>(null);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -64,10 +89,12 @@ export default function ApprovalPage() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [itemsRes, configRes] = await Promise.all([fetch("/api/items"), fetch("/api/config")]);
+      const [itemsRes, bugsRes, configRes] = await Promise.all([fetch("/api/items"), fetch("/api/bugs"), fetch("/api/config")]);
       const nextPayload = (await itemsRes.json()) as DashboardPayload;
+      const nextBugsPayload = (await bugsRes.json()) as BugsPayload;
       const nextConfig = (await configRes.json()) as ConfigPayload;
       setPayload(nextPayload);
+      setBugsPayload(nextBugsPayload);
       setConfig(nextConfig);
       setSelectedBranch(current => {
         if (current && nextPayload.items.some(item => item.branch === current)) return current;
@@ -80,6 +107,13 @@ export default function ApprovalPage() {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 30000);
+    return () => window.clearInterval(timer);
   }, [refresh]);
 
   const postAction = async (path: string, body: Record<string, unknown>, success: string) => {
@@ -104,6 +138,7 @@ export default function ApprovalPage() {
 
   const pendingItems = payload.items.filter(item => item.pending);
   const cleanItems = payload.items.filter(item => !item.pending);
+  const bugRows = bugsPayload.bugs ?? [];
   const actionDisabled = Boolean(busyAction) || !selected;
 
   return (
@@ -125,6 +160,10 @@ export default function ApprovalPage() {
           <div className="metric">
             <span>{cleanItems.length}</span>
             <p>可清理</p>
+          </div>
+          <div className="metric metricWide">
+            <span>{bugRows.length}</span>
+            <p>Excel 命中</p>
           </div>
         </div>
 
@@ -186,6 +225,65 @@ export default function ApprovalPage() {
         </header>
 
         {toast ? <div className="toast">{toast}</div> : null}
+
+        <section className="panel excelPanel">
+          <div className="panelTitle spread">
+            <div>
+              <Database size={16} />
+              <h3>Excel 筛选结果</h3>
+            </div>
+            <span>{config?.excel_path}</span>
+          </div>
+          <div className="excelTableWrap">
+            {bugRows.length > 0 ? (
+              <table className="excelTable">
+                <thead>
+                  <tr>
+                    <th>序号</th>
+                    <th>Excel 行</th>
+                    <th>来源</th>
+                    <th>分类</th>
+                    <th>提出人状态</th>
+                    <th>对接人状态</th>
+                    <th>问题描述</th>
+                    <th>备注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bugRows.map(bug => (
+                    <tr key={`${bug.issue_id}-${bug.excel_row}`}>
+                      <td><strong>{bug.issue_id}</strong></td>
+                      <td>{bug.excel_row}</td>
+                      <td>{bug.source_system}</td>
+                      <td>
+                        <div className="categoryCell">
+                          <span>{bug.primary_category || "未填"}</span>
+                          <small>{bug.secondary_category || "未填"}</small>
+                        </div>
+                      </td>
+                      <td><Badge>{bug.requester_status}</Badge></td>
+                      <td><Badge tone={bug.assignee_status ? "blue" : "gray"}>{bug.assignee_status || "未填"}</Badge></td>
+                      <td>
+                        <div className="descriptionCell">
+                          <span>{bug.description || "未填写问题描述"}</span>
+                          <small>{bug.branch}</small>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="remarkCell">
+                          <span>{bug.remark || "无"}</span>
+                          {bug.remark2 ? <small>{bug.remark2}</small> : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="noDiff">当前 Excel 没有命中筛选规则的 bug。</div>
+            )}
+          </div>
+        </section>
 
         {selected ? (
           <div className="workspace">
@@ -263,6 +361,10 @@ function BranchButton({ item, active, onClick }: { item: FixItem; active: boolea
       <small>{item.changed_files.length} 个文件</small>
     </button>
   );
+}
+
+function Badge({ children, tone = "green" }: { children: string; tone?: "green" | "blue" | "gray" }) {
+  return <span className={`badge ${tone}`}>{children || "未填"}</span>;
 }
 
 function DiffView({ diff }: { diff: string }) {

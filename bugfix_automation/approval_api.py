@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 
 from bugfix_automation.approval import approve_fix, count_pending, load_fix_items, reject_fix, remove_worktree, rework_fix
 from bugfix_automation.config import Config
+from bugfix_automation.filtering import make_branch_name
+from bugfix_automation.runner import list_bugs
 
 
 def serve_api(config: Config, host: str = "127.0.0.1", port: int | None = None) -> None:
@@ -19,6 +21,8 @@ def serve_api(config: Config, host: str = "127.0.0.1", port: int | None = None) 
                 if parsed.path == "/api/items":
                     items = load_fix_items(config)
                     self._send_json({"pending_count": count_pending(items), "items": items})
+                elif parsed.path == "/api/bugs":
+                    self._send_json({"bugs": _bug_payload(config)})
                 elif parsed.path == "/api/config":
                     self._send_json(
                         {
@@ -92,3 +96,28 @@ def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if str(item).strip()]
+
+
+def _bug_payload(config: Config) -> list[dict[str, Any]]:
+    bugs = list_bugs(config)
+    return [
+        {
+            "issue_id": bug.issue_id,
+            "excel_row": bug.excel_row,
+            "branch": make_branch_name(bug),
+            "source_system": bug.source_system,
+            "priority": bug.priority,
+            "primary_category": bug.primary_category,
+            "secondary_category": bug.secondary_category,
+            "requester": bug.requester,
+            "request_date": bug.request_date,
+            "requester_status": bug.requester_status,
+            "assignee": bug.assignee,
+            "assignee_status": bug.assignee_status,
+            "resolved_date": bug.resolved_date,
+            "description": bug.description,
+            "remark": bug.remark,
+            "remark2": bug.remark2,
+        }
+        for bug in bugs
+    ]
