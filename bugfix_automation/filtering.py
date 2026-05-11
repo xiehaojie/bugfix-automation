@@ -31,12 +31,20 @@ class BugRecord:
     raw: dict[str, str]
 
 
-def filter_bugs(rows: list[dict[str, str]], assignee: str) -> list[BugRecord]:
+def filter_bugs(
+    rows: list[dict[str, str]],
+    assignee: str,
+    excluded_assignee_statuses: set[str] | None = None,
+) -> list[BugRecord]:
+    closed_statuses = {SOLVED_STATUS}
+    if excluded_assignee_statuses:
+        closed_statuses.update(status.strip() for status in excluded_assignee_statuses if status.strip())
+
     bugs: list[BugRecord] = []
     for row in rows:
         if _clean(row.get("对接人")) != assignee:
             continue
-        if _clean(row.get("对接人状态")) == SOLVED_STATUS:
+        if _clean(row.get("对接人状态")) in closed_statuses:
             continue
         if _clean(row.get("来源系统")) not in ALLOWED_SOURCE_SYSTEMS:
             continue

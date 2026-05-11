@@ -19,9 +19,10 @@ class FilteringPromptReportTest(unittest.TestCase):
             {"_excel_row": "5", "序号": "90", "提出人状态": "处理中", "来源系统": "后台", "对接人": "谢浩杰", "对接人状态": "处理中", "问题描述": "跳过"},
             {"_excel_row": "6", "序号": "91", "提出人状态": "处理中", "来源系统": "小亦PC", "对接人": "其他人", "对接人状态": "处理中", "问题描述": "跳过"},
             {"_excel_row": "7", "序号": "92", "提出人状态": "处理中", "来源系统": "小亦PC", "对接人": "谢浩杰", "对接人状态": "已解决", "问题描述": "跳过"},
+            {"_excel_row": "8", "序号": "93", "提出人状态": "处理中", "来源系统": "小亦PC", "对接人": "谢浩杰", "对接人状态": "已处理", "问题描述": "可配置关闭状态"},
         ]
 
-        bugs = filter_bugs(rows, assignee="谢浩杰")
+        bugs = filter_bugs(rows, assignee="谢浩杰", excluded_assignee_statuses={"已处理"})
 
         self.assertEqual([bug.issue_id for bug in bugs], ["87", "88"])
         self.assertEqual(bugs[0].excel_row, 2)

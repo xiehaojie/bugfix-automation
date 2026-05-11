@@ -115,6 +115,7 @@ branch refs/heads/feature/demo
             rows = [
                 {"_excel_row": "46", "序号": "1", "提出人状态": "待处理", "来源系统": "小亦PC", "对接人": "谢浩杰", "对接人状态": "处理中", "一级分类": "个人空间", "二级分类": "上传", "问题描述": "上传反馈不明显", "备注": "补充备注"},
                 {"_excel_row": "47", "序号": "2", "提出人状态": "待处理", "来源系统": "后台", "对接人": "谢浩杰", "对接人状态": "处理中", "问题描述": "跳过"},
+                {"_excel_row": "48", "序号": "3", "提出人状态": "待处理", "来源系统": "小亦PC", "对接人": "谢浩杰", "对接人状态": "已处理", "问题描述": "已经完成的不再显示"},
             ]
             with unittest.mock.patch("bugfix_automation.runner.read_sheet", return_value=rows):
                 image_path = root / "runs" / "approval-images" / "fix-1-demo" / "row-46-image-1.png"

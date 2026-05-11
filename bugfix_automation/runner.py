@@ -30,7 +30,7 @@ from bugfix_automation.worktree import (
 
 def list_bugs(config: Config) -> list[BugRecord]:
     rows = read_sheet(config.excel_path, config.sheet_name)
-    return filter_bugs(rows, config.assignee)
+    return filter_bugs(rows, config.assignee, {config.excel_processed_status_value})
 
 
 def run_once(config: Config, dry_run: bool = False) -> tuple[Path, Path, Path]:
