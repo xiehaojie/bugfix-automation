@@ -11,8 +11,10 @@ import {
   ImagePlus,
   Loader2,
   MessageSquareText,
+  PlayCircle,
   RefreshCw,
   RotateCcw,
+  Timer,
   Trash2,
   XCircle
 } from "lucide-react";
@@ -64,6 +66,18 @@ type ConfigPayload = {
   api_port: number;
 };
 
+type SchedulerPayload = {
+  label: string;
+  plist_path: string;
+  installed: boolean;
+  loaded: boolean;
+  detail: string;
+  schedule_hour: number;
+  schedule_minute: number;
+  stdout_log: string;
+  stderr_log: string;
+};
+
 const splitLines = (value: string) =>
   value
     .split("\n")
@@ -73,6 +87,7 @@ const splitLines = (value: string) =>
 export default function ApprovalPage() {
   const [payload, setPayload] = useState<DashboardPayload>({ pending_count: 0, items: [] });
   const [bugsPayload, setBugsPayload] = useState<BugsPayload>({ bugs: [] });
+  const [scheduler, setScheduler] = useState<SchedulerPayload | null>(null);
   const [config, setConfig] = useState<ConfigPayload | null>(null);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -90,13 +105,20 @@ export default function ApprovalPage() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [itemsRes, bugsRes, configRes] = await Promise.all([fetch("/api/items"), fetch("/api/bugs"), fetch("/api/config")]);
+      const [itemsRes, bugsRes, configRes, schedulerRes] = await Promise.all([
+        fetch("/api/items"),
+        fetch("/api/bugs"),
+        fetch("/api/config"),
+        fetch("/api/scheduler")
+      ]);
       const nextPayload = (await itemsRes.json()) as DashboardPayload;
       const nextBugsPayload = (await bugsRes.json()) as BugsPayload;
       const nextConfig = (await configRes.json()) as ConfigPayload;
+      const nextScheduler = (await schedulerRes.json()) as SchedulerPayload;
       setPayload(nextPayload);
       setBugsPayload(nextBugsPayload);
       setConfig(nextConfig);
+      setScheduler(nextScheduler);
       setSelectedBranch(current => {
         if (current && nextPayload.items.some(item => item.branch === current)) return current;
         return nextPayload.items[0]?.branch ?? "";
@@ -226,6 +248,46 @@ export default function ApprovalPage() {
         </header>
 
         {toast ? <div className="toast">{toast}</div> : null}
+
+        <section className="panel schedulerPanel">
+          <div className="panelTitle spread">
+            <div>
+              <Timer size={16} />
+              <h3>定时任务</h3>
+            </div>
+            <span>{scheduler?.label}</span>
+          </div>
+          <div className="schedulerBody">
+            <div className="schedulerStatus">
+              <Badge tone={scheduler?.loaded ? "green" : scheduler?.installed ? "blue" : "gray"}>
+                {scheduler?.loaded ? "已开启" : scheduler?.installed ? "已安装未加载" : "未安装"}
+              </Badge>
+              <strong>
+                每天 {String(scheduler?.schedule_hour ?? 22).padStart(2, "0")}:
+                {String(scheduler?.schedule_minute ?? 0).padStart(2, "0")} 自动执行
+              </strong>
+              <span>{scheduler?.plist_path}</span>
+            </div>
+            <div className="schedulerActions">
+              <button
+                className="button ghost"
+                disabled={Boolean(busyAction)}
+                onClick={() => void postAction("/api/scheduler/install", {}, "定时任务已安装/重新加载")}
+              >
+                <Timer size={16} />
+                开启定时
+              </button>
+              <button
+                className="button secondary"
+                disabled={Boolean(busyAction)}
+                onClick={() => void postAction("/api/run-once", {}, "已开始手动执行，日志写入 logs/manual-run-*.log")}
+              >
+                {busyAction === "/api/run-once" ? <Loader2 size={16} className="spin" /> : <PlayCircle size={16} />}
+                立即执行一次
+              </button>
+            </div>
+          </div>
+        </section>
 
         <section className="panel excelPanel">
           <div className="panelTitle spread">

@@ -18,6 +18,9 @@ codex_bin: codex
 approval_web_port: 8765
 approval_api_port: 8766
 
+excel_processed_status_column: 对接人状态
+excel_processed_status_value: 已处理
+
 schedule:
   hour: 22
   minute: 0

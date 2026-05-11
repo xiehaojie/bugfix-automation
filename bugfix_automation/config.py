@@ -22,6 +22,8 @@ class Config:
     schedule_minute: int
     approval_web_port: int
     approval_api_port: int
+    excel_processed_status_column: str = "对接人状态"
+    excel_processed_status_value: str = "已处理"
 
 
 def load_config(config_path: Path | None = None) -> Config:
@@ -51,6 +53,8 @@ def load_config(config_path: Path | None = None) -> Config:
         schedule_minute=int(os.environ.get("BUGFIX_SCHEDULE_MINUTE", schedule.get("minute", 0))),
         approval_web_port=int(value("approval_web_port", "BUGFIX_APPROVAL_WEB_PORT", 8765)),
         approval_api_port=int(value("approval_api_port", "BUGFIX_APPROVAL_API_PORT", 8766)),
+        excel_processed_status_column=str(value("excel_processed_status_column", "BUGFIX_EXCEL_PROCESSED_STATUS_COLUMN", "对接人状态")),
+        excel_processed_status_value=str(value("excel_processed_status_value", "BUGFIX_EXCEL_PROCESSED_STATUS_VALUE", "已处理")),
     )
 
 

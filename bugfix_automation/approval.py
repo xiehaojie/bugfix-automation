@@ -9,6 +9,9 @@ from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from bugfix_automation.config import Config
+from bugfix_automation.excel_writer import update_cell_by_header
+from bugfix_automation.filtering import make_branch_name
+from bugfix_automation.runner import list_bugs
 from bugfix_automation.runner import assert_scope_clean, codex_command
 from bugfix_automation.worktree import changed_paths, commit_all, create_no_push_git_wrapper, tracked_changed_files
 
@@ -63,6 +66,7 @@ def approve_fix(config: Config, branch: str) -> str:
         raise RuntimeError("没有可审批的 pc-web 改动")
     message = f"fix(pc-web): {branch.removeprefix('fix/')}"
     commit = commit_all(fix.path, message)
+    mark_excel_processed(config, branch)
     remove_worktree(config, branch)
     return commit
 
@@ -76,6 +80,20 @@ def reject_fix(config: Config, branch: str) -> None:
 def remove_worktree(config: Config, branch: str) -> None:
     fix = _find_fix(config, branch)
     subprocess.run(["git", "worktree", "remove", "--force", str(fix.path)], cwd=config.target_repo, check=True)
+
+
+def mark_excel_processed(config: Config, branch: str) -> bool:
+    for bug in list_bugs(config):
+        if make_branch_name(bug) == branch:
+            update_cell_by_header(
+                config.excel_path,
+                config.sheet_name,
+                bug.excel_row,
+                config.excel_processed_status_column,
+                config.excel_processed_status_value,
+            )
+            return True
+    return False
 
 
 def rework_fix(config: Config, branch: str, note: str = "", file_paths: list[str] | None = None, image_paths: list[str] | None = None) -> None:

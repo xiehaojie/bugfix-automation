@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 
 from bugfix_automation.excel_reader import read_sheet
+from bugfix_automation.excel_writer import update_cell_by_header
 
 
 def write_minimal_xlsx(path: Path) -> None:
@@ -67,6 +68,16 @@ class ExcelReaderTest(unittest.TestCase):
         self.assertEqual(rows[0]["对接人"], "谢浩杰")
         self.assertEqual(rows[0]["对接人状态"], "")
         self.assertEqual(rows[0]["问题描述"], "账号离线状态")
+
+    def test_update_cell_by_header_writes_inline_status_without_rebuilding_workbook(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workbook = Path(tmp) / "bugs.xlsx"
+            write_minimal_xlsx(workbook)
+
+            update_cell_by_header(workbook, "在线问题清单", 2, "对接人状态", "已处理")
+            rows = read_sheet(workbook, "在线问题清单")
+
+        self.assertEqual(rows[0]["对接人状态"], "已处理")
 
 
 if __name__ == "__main__":

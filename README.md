@@ -28,6 +28,9 @@ codex_bin: codex
 approval_web_port: 8765
 approval_api_port: 8766
 
+excel_processed_status_column: 对接人状态
+excel_processed_status_value: 已处理
+
 schedule:
   hour: 22
   minute: 0
@@ -45,6 +48,8 @@ BUGFIX_SCHEDULE_HOUR=22
 BUGFIX_SCHEDULE_MINUTE=0
 BUGFIX_APPROVAL_WEB_PORT=8765
 BUGFIX_APPROVAL_API_PORT=8766
+BUGFIX_EXCEL_PROCESSED_STATUS_COLUMN=对接人状态
+BUGFIX_EXCEL_PROCESSED_STATUS_VALUE=已处理
 BUGFIX_CODEX_BIN=codex
 ```
 
@@ -146,6 +151,9 @@ python3 -m bugfix_automation.cli install-launchd
 - 左侧待审批分支列表和待处理数量
 - 实时读取 Excel，并列出当前命中筛选规则的 bug
 - 如果 Excel 行里有 `截图1` / `截图2` / `截图3`，会显示截图缩略图，点击可打开原图
+- 展示定时任务状态、每天执行时间、LaunchAgent 路径
+- 前端按钮开启/重新加载定时任务
+- 前端按钮立即手动执行一次完整自动化
 - 已无 diff 但 worktree 仍残留的分支列表
 - 改动文件列表
 - 类似 GitHub 的代码比对
@@ -155,6 +163,8 @@ python3 -m bugfix_automation.cli install-launchd
 - 重新修改
 
 页面会在打开时读取一次 Excel，之后每 30 秒自动刷新一次；也可以点击“刷新状态”手动刷新。Excel 筛选结果表会展示序号、Excel 行号、截图、来源系统、一级/二级分类、提出人状态、对接人状态、问题描述、备注和对应 `fix/*` 分支名。截图会导出到 `runs/approval-images/`，只通过本地 API 访问。
+
+定时任务面板里的“开启定时”会安装或重新加载 macOS LaunchAgent；“立即执行一次”会在后台启动 `run-once`，日志写入 `logs/manual-run-*.log`。
 
 重新修改可以补充：
 
@@ -170,7 +180,10 @@ python3 -m bugfix_automation.cli install-launchd
 2. 在对应 `fix/*` 分支本地 commit
 3. 移除该 bug 的 worktree
 4. 保留本地 `fix/*` 分支和 commit
-5. 不 push
+5. 将 Excel 对应行的 `对接人状态` 改为 `已处理`
+6. 不 push
+
+Excel 状态更新会直接修改 xlsx 内部的 sheet XML，不使用 openpyxl 重写整本工作簿，尽量避免破坏 WPS 的 `DISPIMG` 截图信息。
 
 ## worktree 是怎么用的
 

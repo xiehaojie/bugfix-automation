@@ -30,6 +30,8 @@ launchd_label: local.demo
 codex_bin: /tmp/codex
 approval_web_port: 9001
 approval_api_port: 9002
+excel_processed_status_column: 对接人状态
+excel_processed_status_value: 已处理
 schedule:
   hour: 21
   minute: 30
@@ -48,6 +50,8 @@ schedule:
         self.assertEqual(config.schedule_minute, 30)
         self.assertEqual(config.approval_web_port, 9001)
         self.assertEqual(config.approval_api_port, 9002)
+        self.assertEqual(config.excel_processed_status_column, "对接人状态")
+        self.assertEqual(config.excel_processed_status_value, "已处理")
 
     def test_environment_overrides_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

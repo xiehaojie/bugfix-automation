@@ -71,6 +71,9 @@ def _sheet_path(archive: zipfile.ZipFile, sheet_name: str) -> str:
 
 
 def _cell_value(cell: ET.Element, shared_strings: list[str]) -> str:
+    inline = cell.find("a:is/a:t", NS)
+    if inline is not None and inline.text is not None:
+        return inline.text
     value = cell.find("a:v", NS)
     if value is None or value.text is None:
         return ""
@@ -87,4 +90,3 @@ def _column_index(cell_ref: str) -> int:
     for letter in letters:
         index = index * 26 + (ord(letter) - ord("A") + 1)
     return index
-

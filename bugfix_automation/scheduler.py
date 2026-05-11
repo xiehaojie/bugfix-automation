@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
 import os
 from pathlib import Path
 import plistlib
 import subprocess
 import shutil
+import sys
 
 from bugfix_automation.config import Config
 
@@ -37,6 +39,54 @@ def install_launchd(config: Config) -> Path:
     subprocess.run(["launchctl", "unload", str(path)], check=False)
     subprocess.run(["launchctl", "load", str(path)], check=True)
     return path
+
+
+def launchd_status(config: Config) -> dict:
+    path = plist_path(config)
+    loaded = False
+    detail = ""
+    if path.exists():
+        result = subprocess.run(
+            ["launchctl", "print", f"gui/{os.getuid()}/{config.launchd_label}"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        loaded = result.returncode == 0
+        stderr = result.stderr.strip()
+        stdout = result.stdout.strip()
+        if stderr:
+            detail = stderr
+        elif stdout:
+            detail = stdout.splitlines()[0]
+    return {
+        "label": config.launchd_label,
+        "plist_path": str(path),
+        "installed": path.exists(),
+        "loaded": loaded,
+        "detail": detail,
+        "schedule_hour": config.schedule_hour,
+        "schedule_minute": config.schedule_minute,
+        "stdout_log": str(config.logs_root / "launchd.out.log"),
+        "stderr_log": str(config.logs_root / "launchd.err.log"),
+    }
+
+
+def start_manual_run(config: Config) -> dict:
+    repo_root = Path(__file__).resolve().parents[1]
+    config.logs_root.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_path = config.logs_root / f"manual-run-{stamp}.log"
+    log_file = log_path.open("ab")
+    process = subprocess.Popen(
+        [sys.executable, "-m", "bugfix_automation.cli", "run-once"],
+        cwd=repo_root,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+    log_file.close()
+    return {"pid": process.pid, "log_path": str(log_path)}
 
 
 def resolve_codex_bin(codex_bin: str) -> str:

@@ -12,6 +12,7 @@ from bugfix_automation.config import Config
 from bugfix_automation.filtering import make_branch_name
 from bugfix_automation.images import export_bug_images
 from bugfix_automation.runner import list_bugs
+from bugfix_automation.scheduler import install_launchd, launchd_status, start_manual_run
 
 
 def serve_api(config: Config, host: str = "127.0.0.1", port: int | None = None) -> None:
@@ -40,6 +41,8 @@ def serve_api(config: Config, host: str = "127.0.0.1", port: int | None = None) 
                             "api_port": config.approval_api_port,
                         }
                     )
+                elif parsed.path == "/api/scheduler":
+                    self._send_json(launchd_status(config))
                 else:
                     self._send_json({"error": "接口不存在"}, status=404)
             except Exception as exc:
@@ -68,6 +71,11 @@ def serve_api(config: Config, host: str = "127.0.0.1", port: int | None = None) 
                         image_paths=_string_list(payload.get("image_paths")),
                     )
                     self._send_json({"ok": True})
+                elif parsed.path == "/api/scheduler/install":
+                    path = install_launchd(config)
+                    self._send_json({"ok": True, "plist_path": str(path), "status": launchd_status(config)})
+                elif parsed.path == "/api/run-once":
+                    self._send_json({"ok": True, "run": start_manual_run(config)})
                 else:
                     self._send_json({"error": "接口不存在"}, status=404)
             except Exception as exc:

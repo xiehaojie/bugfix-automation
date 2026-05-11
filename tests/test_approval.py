@@ -85,7 +85,8 @@ branch refs/heads/feature/demo
                 approval_api_port=8766,
             )
 
-            commit = approve_fix(config, "fix/1-demo")
+            with unittest.mock.patch("bugfix_automation.approval.mark_excel_processed", return_value=True):
+                commit = approve_fix(config, "fix/1-demo")
 
             self.assertEqual(len(commit), 40)
             self.assertFalse(worktree.exists())
