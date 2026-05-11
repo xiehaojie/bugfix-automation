@@ -48,6 +48,38 @@ def run_once(config: Config, dry_run: bool = False) -> tuple[Path, Path, Path]:
     return write_reports(run_dir, results)
 
 
+def run_one(config: Config, issue_id: str | None = None, excel_row: int | None = None, dry_run: bool = False) -> tuple[Path, Path, Path]:
+    bug = select_one_bug(list_bugs(config), issue_id=issue_id, excel_row=excel_row)
+    run_dir = config.runs_root / date.today().isoformat() / f"single-row-{bug.excel_row}"
+    branch = make_branch_name(bug)
+    image_paths = export_bug_images(config.excel_path, bug, run_dir / "images" / branch.replace("/", "-"))
+    if dry_run:
+        result = _result(bug, "dry-run", branch, "Matched filters; single-bug dry-run only.", image_paths)
+    else:
+        result = process_bug(config, bug, branch, image_paths)
+    return write_bug_results(run_dir, [result])
+
+
+def select_one_bug(bugs: list[BugRecord], issue_id: str | None, excel_row: int | None) -> BugRecord:
+    if not issue_id and excel_row is None:
+        raise ValueError("Provide either issue_id or excel_row")
+    matches = [
+        bug
+        for bug in bugs
+        if (issue_id is not None and bug.issue_id == issue_id)
+        or (excel_row is not None and bug.excel_row == excel_row)
+    ]
+    if not matches:
+        raise ValueError("No matching bug found in filtered bug list")
+    if len(matches) > 1:
+        raise ValueError("Multiple matching bugs found; use --row for an exact Excel row")
+    return matches[0]
+
+
+def write_bug_results(run_dir: Path, results: list[dict[str, Any]]) -> tuple[Path, Path, Path]:
+    return write_reports(run_dir, results)
+
+
 def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[Path]) -> dict[str, Any]:
     worktree_path: Path | None = None
     try:

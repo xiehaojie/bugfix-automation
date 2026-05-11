@@ -47,6 +47,18 @@ Run the full automation once:
 python3 -m bugfix_automation.cli run-once
 ```
 
+Run one filtered bug by Excel row without invoking Codex:
+
+```bash
+python3 -m bugfix_automation.cli run-one --row 46 --dry-run
+```
+
+Run one filtered bug by issue id and invoke Codex:
+
+```bash
+python3 -m bugfix_automation.cli run-one --issue-id 1
+```
+
 Install the macOS user LaunchAgent:
 
 ```bash
