@@ -22,7 +22,7 @@ def plist_payload(config: Config) -> dict:
         "Label": config.launchd_label,
         "ProgramArguments": ["/usr/bin/python3", "-m", "bugfix_automation.cli", "run-once"],
         "WorkingDirectory": str(repo_root),
-        "StartCalendarInterval": {"Hour": 22, "Minute": 0},
+        "StartCalendarInterval": {"Hour": config.schedule_hour, "Minute": config.schedule_minute},
         "StandardOutPath": str(config.logs_root / "launchd.out.log"),
         "StandardErrorPath": str(config.logs_root / "launchd.err.log"),
         "EnvironmentVariables": env,
@@ -54,4 +54,4 @@ def resolve_codex_bin(codex_bin: str) -> str:
     for path in known:
         if path.exists():
             return str(path)
-    raise FileNotFoundError("Codex CLI not found. Set BUGFIX_CODEX_BIN to an absolute codex path before installing launchd.")
+    raise FileNotFoundError("没有找到 Codex CLI。请在 config.yaml 中配置 codex_bin，或设置 BUGFIX_CODEX_BIN 为绝对路径。")

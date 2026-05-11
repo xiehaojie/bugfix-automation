@@ -9,7 +9,7 @@ class SchedulerTest(unittest.TestCase):
     def test_resolve_codex_bin_fails_without_absolute_path(self) -> None:
         with patch("bugfix_automation.scheduler.shutil.which", return_value=None):
             with patch.object(Path, "exists", return_value=False):
-                with self.assertRaisesRegex(FileNotFoundError, "Codex CLI not found"):
+                with self.assertRaisesRegex(FileNotFoundError, "没有找到 Codex CLI"):
                     resolve_codex_bin("codex")
 
     def test_resolve_codex_bin_keeps_absolute_path(self) -> None:

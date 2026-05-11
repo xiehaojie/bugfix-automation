@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-import json
 from pathlib import Path
 import subprocess
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from bugfix_automation.config import Config
-from bugfix_automation.worktree import commit_all, tracked_changed_files
+from bugfix_automation.runner import assert_scope_clean, codex_command
+from bugfix_automation.worktree import changed_paths, commit_all, create_no_push_git_wrapper, tracked_changed_files
 
 
 @dataclass(frozen=True)
@@ -62,13 +62,30 @@ def approve_fix(config: Config, branch: str) -> str:
     if not changed_files:
         raise RuntimeError("没有可审批的 pc-web 改动")
     message = f"fix(pc-web): {branch.removeprefix('fix/')}"
-    return commit_all(fix.path, message)
+    commit = commit_all(fix.path, message)
+    remove_worktree(config, branch)
+    return commit
 
 
 def reject_fix(config: Config, branch: str) -> None:
     fix = _find_fix(config, branch)
-    subprocess.run(["git", "worktree", "remove", "--force", str(fix.path)], cwd=config.target_repo, check=True)
+    remove_worktree(config, branch)
     subprocess.run(["git", "branch", "-D", branch], cwd=config.target_repo, check=True)
+
+
+def remove_worktree(config: Config, branch: str) -> None:
+    fix = _find_fix(config, branch)
+    subprocess.run(["git", "worktree", "remove", "--force", str(fix.path)], cwd=config.target_repo, check=True)
+
+
+def rework_fix(config: Config, branch: str, note: str = "", file_paths: list[str] | None = None, image_paths: list[str] | None = None) -> None:
+    fix = _find_fix(config, branch)
+    normalized_images = [Path(path).expanduser() for path in image_paths or [] if path.strip()]
+    prompt = _rework_prompt(config, branch, note, file_paths or [], normalized_images)
+    git_wrapper_dir = create_no_push_git_wrapper(fix.path)
+    _run(codex_command(config.codex_bin, str(fix.path), prompt, normalized_images), cwd=fix.path, path_prefix=git_wrapper_dir, stdin_text=prompt)
+    assert_scope_clean(changed_paths(fix.path), config.target_app_path)
+    _git(fix.path, ["diff", "--check", "--", config.target_app_path])
 
 
 def render_dashboard(config: Config) -> str:
@@ -187,6 +204,41 @@ def _find_fix(config: Config, branch: str) -> FixWorktree:
 def _git(cwd: Path, args: list[str]) -> str:
     result = subprocess.run(["git", *args], cwd=cwd, text=True, capture_output=True, check=True)
     return result.stdout
+
+
+def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_text: str | None = None) -> None:
+    import os
+
+    env = os.environ.copy()
+    if path_prefix is not None:
+        env["PATH"] = f"{path_prefix}{os.pathsep}{env.get('PATH', '')}"
+    subprocess.run(command, cwd=cwd, env=env, input=stdin_text, text=stdin_text is not None, check=True)
+
+
+def _rework_prompt(config: Config, branch: str, note: str, file_paths: list[str], image_paths: list[Path]) -> str:
+    files = "\n".join(f"- {path}" for path in file_paths if path.strip()) or "- 无"
+    images = "\n".join(f"- {path}" for path in image_paths) or "- 无"
+    return f"""你正在继续修改一个已经由自动化创建的前端 bug 修复分支。
+
+分支: {branch}
+前端范围: {config.target_app_path}
+
+请根据下面的补充信息重新分析并修改。要求：
+- 只修改 {config.target_app_path} 范围内的前端代码。
+- 不要修改后端，不要 push，不要合并到主分支。
+- 如果补充文件路径存在，请读取它们作为上下文。
+- 如果传入了图片，请结合图片理解问题。
+- 修改后请尽量运行与该改动相关的检查；如果依赖缺失，请在最终说明中写清楚。
+
+补充文字:
+{note or "无"}
+
+补充文件路径:
+{files}
+
+补充图片路径:
+{images}
+"""
 
 
 def _css() -> str:

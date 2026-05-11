@@ -1,0 +1,23 @@
+# 夜间 Bug 自动修复配置
+# 环境变量优先级更高，适合临时覆盖；平时直接改这个文件即可。
+
+excel_path: /Users/xiehaojie/Desktop/亦城数智人在线清单.xlsx
+sheet_name: 在线问题清单
+assignee: 谢浩杰
+
+target_repo: /Users/xiehaojie/code/monorepo
+target_app_path: apps/pc-web
+
+worktree_root: .target-worktrees
+runs_root: runs
+logs_root: logs
+
+launchd_label: local.bugfix-automation.nightly
+codex_bin: codex
+
+approval_web_port: 8765
+approval_api_port: 8766
+
+schedule:
+  hour: 22
+  minute: 0

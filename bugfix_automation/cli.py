@@ -7,7 +7,7 @@ from bugfix_automation.config import load_config
 from bugfix_automation.filtering import make_branch_name
 from bugfix_automation.runner import list_bugs, run_once, run_one
 from bugfix_automation.scheduler import install_launchd
-from bugfix_automation.approval import serve
+from bugfix_automation.approval_server import serve, serve_api_only
 
 
 def main() -> int:
@@ -23,7 +23,10 @@ def main() -> int:
     subparsers.add_parser("run-once", help="运行本次筛选出的全部 bug")
     approval_parser = subparsers.add_parser("approval-server", help="启动本地可视化审批台")
     approval_parser.add_argument("--host", default="127.0.0.1")
-    approval_parser.add_argument("--port", type=int, default=8765)
+    approval_parser.add_argument("--port", type=int, default=None)
+    approval_api_parser = subparsers.add_parser("approval-api", help="只启动审批 API")
+    approval_api_parser.add_argument("--host", default="127.0.0.1")
+    approval_api_parser.add_argument("--port", type=int, default=None)
     subparsers.add_parser("install-launchd", help="安装每天 22:00 的 macOS 定时任务")
     args = parser.parse_args()
 
@@ -69,6 +72,9 @@ def main() -> int:
         return 0
     if args.command == "approval-server":
         serve(config, host=args.host, port=args.port)
+        return 0
+    if args.command == "approval-api":
+        serve_api_only(config, host=args.host, port=args.port)
         return 0
     parser.error("未知命令")
     return 2
