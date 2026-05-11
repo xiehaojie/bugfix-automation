@@ -145,6 +145,7 @@ class FilteringPromptReportTest(unittest.TestCase):
         self.assertIn("workspace-write", command)
         self.assertNotIn("--ask-for-approval", command)
         self.assertIn("--cd", command)
+        self.assertEqual(command[-1], "-")
 
 
 if __name__ == "__main__":

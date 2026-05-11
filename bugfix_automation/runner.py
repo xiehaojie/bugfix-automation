@@ -96,7 +96,7 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
         install_no_push_hook(worktree_path)
         git_wrapper_dir = create_no_push_git_wrapper(worktree_path)
         prompt = render_codex_prompt(bug, config.target_app_path)
-        _run(codex_command(config.codex_bin, str(worktree_path), prompt, image_paths), cwd=worktree_path, path_prefix=git_wrapper_dir)
+        _run(codex_command(config.codex_bin, str(worktree_path), prompt, image_paths), cwd=worktree_path, path_prefix=git_wrapper_dir, stdin_text=prompt)
         assert_scope_clean(changed_paths(worktree_path), config.target_app_path)
         _verify_frontend(worktree_path, config.target_app_path)
         assert_scope_clean(changed_paths(worktree_path), config.target_app_path)
@@ -133,7 +133,7 @@ def codex_command(codex_bin: str, worktree_path: str, prompt: str, image_paths: 
     ]
     for image_path in image_paths or []:
         command.extend(["--image", str(image_path)])
-    command.append(prompt)
+    command.append("-")
     return command
 
 
@@ -149,11 +149,11 @@ def _verify_frontend(worktree_path: Path, target_app_path: str) -> None:
     _run(["npm", "run", "build"], cwd=app_path)
 
 
-def _run(command: list[str], cwd: Path, path_prefix: Path | None = None) -> None:
+def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_text: str | None = None) -> None:
     env = os.environ.copy()
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env.get('PATH', '')}"
-    subprocess.run(command, cwd=cwd, env=env, check=True)
+    subprocess.run(command, cwd=cwd, env=env, input=stdin_text, text=stdin_text is not None, check=True)
 
 
 def _commit_message(bug: BugRecord) -> str:

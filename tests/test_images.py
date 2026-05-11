@@ -69,7 +69,7 @@ class ImagesTest(unittest.TestCase):
         self.assertIn("--image", command)
         self.assertIn("/tmp/one.png", command)
         self.assertIn("/tmp/two.jpg", command)
-        self.assertEqual(command[-1], "prompt")
+        self.assertEqual(command[-1], "-")
 
 
 if __name__ == "__main__":
