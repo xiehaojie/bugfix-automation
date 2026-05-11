@@ -35,7 +35,20 @@ class FilteringPromptReportTest(unittest.TestCase):
 
     def test_prompt_restricts_scope_and_remote_behavior(self) -> None:
         bug = filter_bugs([
-            {"_excel_row": "2", "序号": "87", "提出人状态": "处理中", "来源系统": "小亦PC", "对接人": "谢浩杰", "对接人状态": "", "问题描述": "账号离线状态"}
+            {
+                "_excel_row": "2",
+                "序号": "87",
+                "提出人状态": "处理中",
+                "来源系统": "小亦PC",
+                "一级分类": "个人空间",
+                "二级分类": "文件上传交互",
+                "提出人": "齐震杰",
+                "对接人": "谢浩杰",
+                "对接人状态": "",
+                "问题描述": "账号离线状态",
+                "备注": "页面反馈不明显",
+                "备注2": "需要参考截图",
+            }
         ], assignee="谢浩杰")[0]
 
         prompt = render_codex_prompt(bug, target_app_path="apps/pc-web")
@@ -47,11 +60,48 @@ class FilteringPromptReportTest(unittest.TestCase):
         self.assertIn("frontend-fix-agent", prompt)
         self.assertIn("verification-agent", prompt)
         self.assertIn("branch-commit-agent", prompt)
+        self.assertIn("一级分类: 个人空间", prompt)
+        self.assertIn("二级分类: 文件上传交互", prompt)
+        self.assertIn("备注: 页面反馈不明显", prompt)
+
+    def test_filter_bugs_converts_excel_serial_dates_for_report_fields(self) -> None:
+        bug = filter_bugs([
+            {
+                "_excel_row": "46",
+                "序号": "1",
+                "提出人状态": "待处理",
+                "来源系统": "小亦PC",
+                "对接人": "谢浩杰",
+                "对接人状态": "处理中",
+                "提出日期": "46133",
+                "解决日期": "46134",
+                "问题描述": "上传反馈",
+            }
+        ], assignee="谢浩杰")[0]
+
+        self.assertEqual(bug.request_date, "2026/4/21")
+        self.assertEqual(bug.resolved_date, "2026/4/22")
 
     def test_write_reports_creates_json_and_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
-            json_path, md_path, approval_path = write_reports(output, [{"issue_id": "87", "status": "dry-run", "branch": "fix/bug-87-demo"}])
+            json_path, md_path, approval_path = write_reports(
+                output,
+                [
+                    {
+                        "issue_id": "87",
+                        "excel_row": 2,
+                        "status": "dry-run",
+                        "branch": "fix/bug-87-demo",
+                        "primary_category": "个人空间",
+                        "secondary_category": "文件上传交互",
+                        "requester": "齐震杰",
+                        "description": "页面反馈不明显",
+                        "remark": "去掉上传 icon",
+                        "remark2": "参考截图",
+                    }
+                ],
+            )
 
             data = json.loads(json_path.read_text(encoding="utf-8"))
             markdown = md_path.read_text(encoding="utf-8")
@@ -60,6 +110,10 @@ class FilteringPromptReportTest(unittest.TestCase):
         self.assertEqual(data["results"][0]["issue_id"], "87")
         self.assertIn("fix/bug-87-demo", markdown)
         self.assertIn("Morning Approval Report", approval)
+        self.assertIn("一级分类: `个人空间`", approval)
+        self.assertIn("二级分类: `文件上传交互`", approval)
+        self.assertIn("问题描述: 页面反馈不明显", approval)
+        self.assertIn("备注: 去掉上传 icon", approval)
 
     def test_conflict_index_detects_multiple_bugs_touching_same_file(self) -> None:
         conflicts = conflict_index([

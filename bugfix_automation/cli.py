@@ -26,7 +26,21 @@ def main() -> int:
     config = load_config()
     if args.command == "list":
         bugs = list_bugs(config)
-        print(json.dumps([{"issue_id": bug.issue_id, "row": bug.excel_row, "branch": make_branch_name(bug), "description": bug.description} for bug in bugs], ensure_ascii=False, indent=2))
+        print(json.dumps([
+            {
+                "issue_id": bug.issue_id,
+                "row": bug.excel_row,
+                "branch": make_branch_name(bug),
+                "source_system": bug.source_system,
+                "primary_category": bug.primary_category,
+                "secondary_category": bug.secondary_category,
+                "requester": bug.requester,
+                "description": bug.description,
+                "remark": bug.remark,
+                "remark2": bug.remark2,
+            }
+            for bug in bugs
+        ], ensure_ascii=False, indent=2))
         if args.dry_run:
             json_path, md_path, approval_path = run_once(config, dry_run=True)
             print(f"Dry-run report: {json_path}")

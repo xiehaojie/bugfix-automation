@@ -24,12 +24,19 @@ Excel 信息：
 - Excel 行号: {bug.excel_row}
 - 序号: {bug.issue_id}
 - 来源系统: {bug.source_system}
+- 一级分类: {bug.primary_category}
+- 二级分类: {bug.secondary_category}
+- 优先级: {bug.priority}
+- 提出人: {bug.requester}
+- 提出日期: {bug.request_date}
 - 提出人状态: {bug.requester_status}
 - 对接人: {bug.assignee}
 - 对接人状态: {bug.assignee_status}
+- 解决日期: {bug.resolved_date}
 - 问题描述: {bug.description}
+- 备注: {bug.remark}
+- 备注2: {bug.remark2}
 
 完整行字段：
 {raw_lines}
 """
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 import re
 import unicodedata
 
@@ -16,9 +17,17 @@ class BugRecord:
     issue_id: str
     requester_status: str
     source_system: str
+    priority: str
+    primary_category: str
+    secondary_category: str
+    requester: str
+    request_date: str
     assignee: str
     assignee_status: str
+    resolved_date: str
     description: str
+    remark: str
+    remark2: str
     raw: dict[str, str]
 
 
@@ -39,9 +48,17 @@ def filter_bugs(rows: list[dict[str, str]], assignee: str) -> list[BugRecord]:
                 issue_id=_clean(row.get("序号")) or str(row.get("_excel_row", "")),
                 requester_status=_clean(row.get("提出人状态")),
                 source_system=_clean(row.get("来源系统")),
+                priority=_clean(row.get("优先级")),
+                primary_category=_clean(row.get("一级分类")),
+                secondary_category=_clean(row.get("二级分类")),
+                requester=_clean(row.get("提出人")),
+                request_date=_format_excel_date(row.get("提出日期")),
                 assignee=_clean(row.get("对接人")),
                 assignee_status=_clean(row.get("对接人状态")),
+                resolved_date=_format_excel_date(row.get("解决日期")),
                 description=_clean(row.get("问题描述")),
+                remark=_clean(row.get("备注")),
+                remark2=_clean(row.get("备注2")),
                 raw=row,
             )
         )
@@ -57,6 +74,20 @@ def make_branch_name(bug: BugRecord) -> str:
 
 def _clean(value: str | None) -> str:
     return (value or "").strip()
+
+
+def _format_excel_date(value: str | None) -> str:
+    cleaned = _clean(value)
+    if not cleaned:
+        return ""
+    try:
+        serial = float(cleaned)
+    except ValueError:
+        return cleaned
+    if serial <= 0:
+        return cleaned
+    date_value = datetime(1899, 12, 30) + timedelta(days=serial)
+    return f"{date_value.year}/{date_value.month}/{date_value.day}"
 
 
 PINYIN = {
@@ -81,4 +112,3 @@ def _slugify(value: str) -> str:
         else:
             parts.append("-")
     return re.sub(r"-+", "-", "".join(parts)).strip("-")
-
