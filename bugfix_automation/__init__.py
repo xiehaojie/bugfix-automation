@@ -1,0 +1,2 @@
+"""Nightly frontend bugfix automation."""
+
