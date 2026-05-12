@@ -108,8 +108,8 @@ exec "{real_git}" "$@"
     return wrapper_dir
 
 
-def commit_all(path: Path, message: str) -> str:
-    subprocess.run(["git", "add", "apps/pc-web"], cwd=path, check=True)
+def commit_all(path: Path, message: str, target_app_path: str = "apps/pc-web") -> str:
+    subprocess.run(["git", "add", target_app_path], cwd=path, check=True)
     subprocess.run(["git", "commit", "-m", message], cwd=path, check=True)
     return head_sha(path)
 
@@ -119,6 +119,6 @@ def head_sha(path: Path) -> str:
     return result.stdout.strip()
 
 
-def diff_stat(path: Path, base: str, head: str) -> str:
-    result = subprocess.run(["git", "diff", "--stat", base, head, "--", "apps/pc-web"], cwd=path, text=True, capture_output=True, check=True)
+def diff_stat(path: Path, base: str, head: str, target_app_path: str = "apps/pc-web") -> str:
+    result = subprocess.run(["git", "diff", "--stat", base, head, "--", target_app_path], cwd=path, text=True, capture_output=True, check=True)
     return result.stdout.strip()

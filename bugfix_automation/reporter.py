@@ -22,7 +22,7 @@ def write_reports(output_dir: Path, results: list[dict[str, Any]]) -> tuple[Path
 def conflict_index(results: list[dict[str, Any]]) -> dict[str, list[str]]:
     file_to_issues: dict[str, list[str]] = {}
     for result in results:
-        if result.get("status") != "committed":
+        if result.get("status") not in {"committed", "pending-approval"}:
             continue
         issue_id = str(result.get("issue_id", ""))
         for file_path in result.get("changed_files", []):

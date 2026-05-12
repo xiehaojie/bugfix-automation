@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import re
 import unicodedata
 
+from bugfix_automation.config import FilterRule
+
 
 ALLOWED_SOURCE_SYSTEMS = {"小亦PC", "小亦APP"}
 ALLOWED_REQUESTER_STATUSES = {"待处理", "处理中"}
@@ -35,6 +37,7 @@ def filter_bugs(
     rows: list[dict[str, str]],
     assignee: str,
     excluded_assignee_statuses: set[str] | None = None,
+    rules: tuple[FilterRule, ...] | None = None,
 ) -> list[BugRecord]:
     closed_statuses = {SOLVED_STATUS}
     if excluded_assignee_statuses:
@@ -42,14 +45,18 @@ def filter_bugs(
 
     bugs: list[BugRecord] = []
     for row in rows:
-        if _clean(row.get("对接人")) != assignee:
-            continue
-        if _clean(row.get("对接人状态")) in closed_statuses:
-            continue
-        if _clean(row.get("来源系统")) not in ALLOWED_SOURCE_SYSTEMS:
-            continue
-        if _clean(row.get("提出人状态")) not in ALLOWED_REQUESTER_STATUSES:
-            continue
+        if rules:
+            if not _matches_rules(row, rules):
+                continue
+        else:
+            if _clean(row.get("对接人")) != assignee:
+                continue
+            if _clean(row.get("对接人状态")) in closed_statuses:
+                continue
+            if _clean(row.get("来源系统")) not in ALLOWED_SOURCE_SYSTEMS:
+                continue
+            if _clean(row.get("提出人状态")) not in ALLOWED_REQUESTER_STATUSES:
+                continue
         bugs.append(
             BugRecord(
                 excel_row=int(row.get("_excel_row", "0") or "0"),
@@ -73,13 +80,62 @@ def filter_bugs(
     return bugs
 
 
-def make_branch_name(bug: BugRecord) -> str:
-    summary = _chinese_summary(bug.description) or _slugify(bug.secondary_category or bug.primary_category) or f"row-{bug.excel_row}"
-    return f"fix/{bug.issue_id}-{summary}"
+def _matches_rules(row: dict[str, str], rules: tuple[FilterRule, ...]) -> bool:
+    for rule in rules:
+        cell = _clean(row.get(rule.field))
+        cell_values = _split_cell_values(cell)
+        values = set(rule.values or ((rule.value,) if rule.value else ()))
+        if rule.op == "equals" and cell != rule.value:
+            return False
+        if rule.op == "not_equals" and cell == rule.value:
+            return False
+        if rule.op == "in" and cell not in values:
+            return False
+        if rule.op == "any_in" and not values.intersection(cell_values):
+            return False
+        if rule.op == "all_in" and (not cell_values or not cell_values.issubset(values)):
+            return False
+        if rule.op == "not_in" and (cell in values or values.intersection(cell_values)):
+            return False
+        if rule.op == "non_empty" and not cell:
+            return False
+        if rule.op == "empty" and cell:
+            return False
+    return True
+
+
+def make_branch_name(
+    bug: BugRecord,
+    summary_fields: tuple[str, ...] | None = None,
+    timestamp: str | datetime | None = None,
+) -> str:
+    summary = _summary_from_fields(bug, summary_fields or ("问题描述",))
+    stamp = _format_branch_stamp(timestamp or datetime.now())
+    return f"fix/bug-{bug.issue_id}-{summary}-{stamp}"
 
 
 def _clean(value: str | None) -> str:
     return (value or "").strip()
+
+
+def _split_cell_values(value: str) -> set[str]:
+    return {part.strip() for part in re.split(r"[,，、;；\n]+", value) if part.strip()}
+
+
+def _summary_from_fields(bug: BugRecord, fields: tuple[str, ...]) -> str:
+    parts = [bug.raw.get(field, "") for field in fields if bug.raw.get(field, "").strip()]
+    joined = " ".join(parts) or bug.description or bug.remark or bug.secondary_category or bug.primary_category
+    summary = _chinese_summary(joined) or _slugify(joined)
+    return summary or f"row-{bug.excel_row}"
+
+
+def _format_branch_stamp(value: str | datetime) -> str:
+    if isinstance(value, datetime):
+        return value.strftime("%Y%m%d%H%M")
+    text = str(value).strip()
+    if re.fullmatch(r"\d{12}", text):
+        return text
+    return datetime.now().strftime("%Y%m%d%H%M")
 
 
 def _format_excel_date(value: str | None) -> str:

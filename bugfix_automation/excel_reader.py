@@ -25,14 +25,16 @@ def read_sheet(path: Path, sheet_name: str) -> list[dict[str, str]]:
         for cell in row.findall("a:c", NS):
             index = _column_index(cell.attrib.get("r", ""))
             values[index] = _cell_value(cell, shared_strings)
-        rows.append((row_number, values))
+        rows.append((row_number, values, row.attrib.get("hidden") == "1"))
 
     if not rows:
         return []
 
     headers = rows[0][1]
     output: list[dict[str, str]] = []
-    for row_number, values in rows[1:]:
+    for row_number, values, hidden in rows[1:]:
+        if hidden:
+            continue
         mapped: dict[str, str] = {"_excel_row": str(row_number)}
         for index, header in headers.items():
             if header:

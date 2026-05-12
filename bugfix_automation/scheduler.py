@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 import os
 from pathlib import Path
@@ -41,11 +42,29 @@ def install_launchd(config: Config) -> Path:
     return path
 
 
+def install_launchd_at(config: Config, hour: int, minute: int) -> Path:
+    _validate_time(hour, minute)
+    return install_launchd(replace(config, schedule_hour=hour, schedule_minute=minute))
+
+
+def uninstall_launchd(config: Config) -> dict:
+    path = plist_path(config)
+    unloaded = subprocess.run(["launchctl", "unload", str(path)], check=False)
+    removed = False
+    if path.exists():
+        path.unlink()
+        removed = True
+    return {"ok": True, "unloaded": unloaded.returncode == 0, "removed": removed, "plist_path": str(path)}
+
+
 def launchd_status(config: Config) -> dict:
     path = plist_path(config)
     loaded = False
     detail = ""
+    schedule_hour = config.schedule_hour
+    schedule_minute = config.schedule_minute
     if path.exists():
+        schedule_hour, schedule_minute = _plist_schedule(path, config.schedule_hour, config.schedule_minute)
         result = subprocess.run(
             ["launchctl", "print", f"gui/{os.getuid()}/{config.launchd_label}"],
             text=True,
@@ -65,8 +84,8 @@ def launchd_status(config: Config) -> dict:
         "installed": path.exists(),
         "loaded": loaded,
         "detail": detail,
-        "schedule_hour": config.schedule_hour,
-        "schedule_minute": config.schedule_minute,
+        "schedule_hour": schedule_hour,
+        "schedule_minute": schedule_minute,
         "stdout_log": str(config.logs_root / "launchd.out.log"),
         "stderr_log": str(config.logs_root / "launchd.err.log"),
     }
@@ -105,3 +124,24 @@ def resolve_codex_bin(codex_bin: str) -> str:
         if path.exists():
             return str(path)
     raise FileNotFoundError("没有找到 Codex CLI。请在 config.yaml 中配置 codex_bin，或设置 BUGFIX_CODEX_BIN 为绝对路径。")
+
+
+def _plist_schedule(path: Path, default_hour: int, default_minute: int) -> tuple[int, int]:
+    try:
+        payload = plistlib.loads(path.read_bytes())
+    except (OSError, plistlib.InvalidFileException):
+        return default_hour, default_minute
+    interval = payload.get("StartCalendarInterval", {})
+    if not isinstance(interval, dict):
+        return default_hour, default_minute
+    try:
+        return int(interval.get("Hour", default_hour)), int(interval.get("Minute", default_minute))
+    except (TypeError, ValueError):
+        return default_hour, default_minute
+
+
+def _validate_time(hour: int, minute: int) -> None:
+    if hour < 0 or hour > 23:
+        raise ValueError("小时必须在 0-23 之间")
+    if minute < 0 or minute > 59:
+        raise ValueError("分钟必须在 0-59 之间")

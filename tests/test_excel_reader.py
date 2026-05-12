@@ -69,6 +69,37 @@ class ExcelReaderTest(unittest.TestCase):
         self.assertEqual(rows[0]["对接人状态"], "")
         self.assertEqual(rows[0]["问题描述"], "账号离线状态")
 
+    def test_read_sheet_skips_rows_hidden_by_excel_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workbook = Path(tmp) / "bugs.xlsx"
+            write_minimal_xlsx(workbook)
+            with zipfile.ZipFile(workbook, "a") as archive:
+                archive.writestr(
+                    "xl/worksheets/sheet1.xml",
+                    """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1">
+      <c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c>
+      <c r="D1" t="s"><v>3</v></c><c r="E1" t="s"><v>4</v></c><c r="F1" t="s"><v>5</v></c>
+    </row>
+    <row r="2" hidden="1">
+      <c r="A2"><v>87</v></c><c r="B2" t="s"><v>6</v></c><c r="C2" t="s"><v>7</v></c>
+      <c r="D2" t="s"><v>8</v></c><c r="F2" t="s"><v>9</v></c>
+    </row>
+    <row r="9">
+      <c r="A9"><v>88</v></c><c r="B9" t="s"><v>6</v></c><c r="C9" t="s"><v>7</v></c>
+      <c r="D9" t="s"><v>8</v></c><c r="F9" t="s"><v>9</v></c>
+    </row>
+  </sheetData>
+</worksheet>""",
+                )
+
+            rows = read_sheet(workbook, "在线问题清单")
+
+        self.assertEqual([row["序号"] for row in rows], ["88"])
+        self.assertEqual(rows[0]["_excel_row"], "9")
+
     def test_update_cell_by_header_writes_inline_status_without_rebuilding_workbook(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workbook = Path(tmp) / "bugs.xlsx"

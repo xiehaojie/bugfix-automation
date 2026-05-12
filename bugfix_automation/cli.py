@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 
-from bugfix_automation.config import load_config
+from bugfix_automation.config import load_config, update_config_yaml
 from bugfix_automation.filtering import make_branch_name
 from bugfix_automation.runner import list_bugs, run_once, run_one
-from bugfix_automation.scheduler import install_launchd
+from bugfix_automation.scheduler import install_launchd_at
 from bugfix_automation.approval_server import serve, serve_api_only
 
 
@@ -27,17 +28,20 @@ def main() -> int:
     approval_api_parser = subparsers.add_parser("approval-api", help="只启动审批 API")
     approval_api_parser.add_argument("--host", default="127.0.0.1")
     approval_api_parser.add_argument("--port", type=int, default=None)
-    subparsers.add_parser("install-launchd", help="安装每天 22:00 的 macOS 定时任务")
+    launchd_parser = subparsers.add_parser("install-launchd", help="安装 macOS 定时任务")
+    launchd_parser.add_argument("--hour", type=int, default=None, help="每天几点执行，0-23")
+    launchd_parser.add_argument("--minute", type=int, default=None, help="每小时第几分钟执行，0-59")
     args = parser.parse_args()
 
     config = load_config()
     if args.command == "list":
+        stamp = datetime.now().strftime("%Y%m%d%H%M")
         bugs = list_bugs(config)
         print(json.dumps([
             {
                 "issue_id": bug.issue_id,
                 "row": bug.excel_row,
-                "branch": make_branch_name(bug),
+                "branch": make_branch_name(bug, config.branch_summary_fields, stamp),
                 "source_system": bug.source_system,
                 "primary_category": bug.primary_category,
                 "secondary_category": bug.secondary_category,
@@ -67,7 +71,11 @@ def main() -> int:
         print(f"审批报告: {approval_path}")
         return 0
     if args.command == "install-launchd":
-        path = install_launchd(config)
+        hour = config.schedule_hour if args.hour is None else args.hour
+        minute = config.schedule_minute if args.minute is None else args.minute
+        update_config_yaml({"schedule": {"hour": hour, "minute": minute}})
+        config = load_config()
+        path = install_launchd_at(config, hour, minute)
         print(f"已安装定时任务: {path}")
         return 0
     if args.command == "approval-server":

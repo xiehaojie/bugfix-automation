@@ -1,0 +1,20 @@
+{
+  "files.exclude": {
+    "approval-web/node_modules": true,
+    "approval-web/.next": true,
+    "node_modules": true,
+    ".next": true,
+    "logs": true,
+    "runs": true,
+    "uploads": true
+  },
+  "search.exclude": {
+    "approval-web/node_modules": true,
+    "approval-web/.next": true,
+    "node_modules": true,
+    ".next": true,
+    "logs": true,
+    "runs": true,
+    "uploads": true
+  }
+}

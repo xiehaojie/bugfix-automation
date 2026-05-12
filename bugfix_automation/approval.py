@@ -4,15 +4,16 @@ from dataclasses import dataclass
 from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import re
 import subprocess
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from bugfix_automation.config import Config
 from bugfix_automation.excel_writer import update_cell_by_header
-from bugfix_automation.filtering import make_branch_name
 from bugfix_automation.runner import list_bugs
-from bugfix_automation.runner import assert_scope_clean, codex_command
+from bugfix_automation.runner import assert_scope_clean, codex_command, codex_log_path
+from bugfix_automation.task_state import is_task_active, set_task_state, task_state
 from bugfix_automation.worktree import changed_paths, commit_all, create_no_push_git_wrapper, tracked_changed_files
 
 
@@ -42,36 +43,51 @@ def load_fix_items(config: Config) -> list[dict[str, Any]]:
         changed_files = tracked_changed_files(fix.path, config.target_app_path)
         app_diff = _git(fix.path, ["diff", "--", config.target_app_path])
         status = _git(fix.path, ["status", "--short", "--", config.target_app_path])
+        state = task_state(config, fix.branch)
+        active = is_task_active(config, fix.branch)
         items.append(
             {
                 "branch": fix.branch,
                 "path": str(fix.path),
                 "changed_files": changed_files,
                 "pending": bool(changed_files),
+                "active": active,
+                "task_status": state.get("status", ""),
+                "task_phase": state.get("phase", ""),
+                "task_detail": state.get("detail", ""),
+                "task_updated_at": state.get("updated_at", ""),
                 "status": status,
                 "diff": app_diff,
+                "log_path": str(codex_log_path(config, fix.branch)),
             }
         )
     return items
 
 
 def count_pending(items: list[dict[str, Any]]) -> int:
-    return sum(1 for item in items if any(str(path).startswith("apps/pc-web/") for path in item.get("changed_files", [])))
+    return sum(1 for item in items if bool(item.get("active")) or bool(item.get("pending")) or bool(item.get("changed_files")))
 
 
 def approve_fix(config: Config, branch: str) -> str:
+    if is_task_active(config, branch):
+        state = task_state(config, branch)
+        raise RuntimeError(f"任务仍在执行中，不能审批提交：{state.get('status', '')}/{state.get('phase', '')}")
     fix = _find_fix(config, branch)
     changed_files = tracked_changed_files(fix.path, config.target_app_path)
     if not changed_files:
         raise RuntimeError("没有可审批的 pc-web 改动")
-    message = f"fix(pc-web): {branch.removeprefix('fix/')}"
-    commit = commit_all(fix.path, message)
+    scope = config.target_app_path.rstrip("/").split("/")[-1] or "frontend"
+    message = f"fix({scope}): {branch.removeprefix('fix/')}"
+    commit = commit_all(fix.path, message, config.target_app_path)
     mark_excel_processed(config, branch)
     remove_worktree(config, branch)
     return commit
 
 
 def reject_fix(config: Config, branch: str) -> None:
+    if is_task_active(config, branch):
+        state = task_state(config, branch)
+        raise RuntimeError(f"任务仍在执行中，不能拒绝删除：{state.get('status', '')}/{state.get('phase', '')}")
     fix = _find_fix(config, branch)
     remove_worktree(config, branch)
     subprocess.run(["git", "branch", "-D", branch], cwd=config.target_repo, check=True)
@@ -83,8 +99,19 @@ def remove_worktree(config: Config, branch: str) -> None:
 
 
 def mark_excel_processed(config: Config, branch: str) -> bool:
+    state = task_state(config, branch)
+    if state.get("excel_row"):
+        update_cell_by_header(
+            config.excel_path,
+            config.sheet_name,
+            int(state["excel_row"]),
+            config.excel_processed_status_column,
+            config.excel_processed_status_value,
+        )
+        return True
+    branch_issue_id = _branch_issue_id(branch)
     for bug in list_bugs(config):
-        if make_branch_name(bug) == branch:
+        if branch_issue_id and bug.issue_id == branch_issue_id:
             update_cell_by_header(
                 config.excel_path,
                 config.sheet_name,
@@ -96,14 +123,34 @@ def mark_excel_processed(config: Config, branch: str) -> bool:
     return False
 
 
+def _branch_issue_id(branch: str) -> str:
+    if branch.startswith("fix/bug-"):
+        without_prefix = branch.removeprefix("fix/bug-")
+        prefix, separator, stamp = without_prefix.rpartition("-")
+        if separator and re.fullmatch(r"\d{12}", stamp):
+            return prefix.split("-", 1)[0]
+    if branch.startswith("fix/"):
+        return branch.removeprefix("fix/").split("-", 1)[0]
+    return ""
+
+
 def rework_fix(config: Config, branch: str, note: str = "", file_paths: list[str] | None = None, image_paths: list[str] | None = None) -> None:
+    if is_task_active(config, branch):
+        state = task_state(config, branch)
+        raise RuntimeError(f"任务仍在执行中，不能重新修改：{state.get('status', '')}/{state.get('phase', '')}")
     fix = _find_fix(config, branch)
     normalized_images = [Path(path).expanduser() for path in image_paths or [] if path.strip()]
     prompt = _rework_prompt(config, branch, note, file_paths or [], normalized_images)
     git_wrapper_dir = create_no_push_git_wrapper(fix.path)
-    _run(codex_command(config.codex_bin, str(fix.path), prompt, normalized_images), cwd=fix.path, path_prefix=git_wrapper_dir, stdin_text=prompt)
-    assert_scope_clean(changed_paths(fix.path), config.target_app_path)
-    _git(fix.path, ["diff", "--check", "--", config.target_app_path])
+    set_task_state(config, branch, "reworking", detail="正在根据补充信息重新修改。", phase="codex", image_paths=normalized_images)
+    try:
+        _run(codex_command(config.codex_bin, str(fix.path), prompt, normalized_images), cwd=fix.path, path_prefix=git_wrapper_dir, stdin_text=prompt, log_path=codex_log_path(config, branch))
+        assert_scope_clean(changed_paths(fix.path), config.target_app_path)
+        _git(fix.path, ["diff", "--check", "--", config.target_app_path])
+        set_task_state(config, branch, "pending-approval", detail="重新修改完成，等待审批。", phase="done", image_paths=normalized_images)
+    except Exception as exc:
+        set_task_state(config, branch, "failed", detail=f"{type(exc).__name__}: {exc}", phase="failed", image_paths=normalized_images)
+        raise
 
 
 def render_dashboard(config: Config) -> str:
@@ -224,13 +271,20 @@ def _git(cwd: Path, args: list[str]) -> str:
     return result.stdout
 
 
-def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_text: str | None = None) -> None:
+def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_text: str | None = None, log_path: Path | None = None) -> None:
     import os
 
     env = os.environ.copy()
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env.get('PATH', '')}"
-    subprocess.run(command, cwd=cwd, env=env, input=stdin_text, text=stdin_text is not None, check=True)
+    if log_path is None:
+        subprocess.run(command, cwd=cwd, env=env, input=stdin_text, text=stdin_text is not None, check=True)
+        return
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as log_file:
+        log_file.write(f"\n$ {' '.join(command)}\n")
+        log_file.flush()
+        subprocess.run(command, cwd=cwd, env=env, input=stdin_text, text=stdin_text is not None, stdout=log_file, stderr=subprocess.STDOUT, check=True)
 
 
 def _rework_prompt(config: Config, branch: str, note: str, file_paths: list[str], image_paths: list[Path]) -> str:
