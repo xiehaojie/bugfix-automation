@@ -24,6 +24,8 @@ class WorkspaceConfig:
     verify_commands: tuple[tuple[str, ...], ...]
     prompt_context_paths: tuple[str, ...]
     max_concurrency: int
+    scope: str = "frontend"
+    repo_paths: tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -37,7 +39,7 @@ class Config:
     runs_root: Path
     logs_root: Path
     launchd_label: str
-    codex_bin: str
+    cli_tool: str
     schedule_hour: int
     schedule_minute: int
     approval_web_port: int
@@ -52,6 +54,7 @@ class Config:
     prompt_template: str = ""
     prompt_context_paths: tuple[str, ...] = ()
     max_concurrency: int = 2
+    validation_target_branches: tuple[str, ...] = ("main", "master", "develop")
 
 
 def load_config(config_path: Path | None = None) -> Config:
@@ -70,37 +73,39 @@ def load_config(config_path: Path | None = None) -> Config:
     worktree_root = _path(value("worktree_root", "BUGFIX_WORKTREE_ROOT", repo_root / ".target-worktrees"), repo_root)
     runs_root = _path(value("runs_root", "BUGFIX_RUNS_ROOT", repo_root / "runs"), repo_root)
     logs_root = _path(value("logs_root", "BUGFIX_LOGS_ROOT", repo_root / "logs"), repo_root)
-    workspaces = _workspace_configs(yaml_values, repo_root, target_repo, str(value("target_app_path", "BUGFIX_TARGET_APP_PATH", "apps/pc-web")))
-    active = _active_workspace(workspaces, active_workspace)
+    fallback_app_path = str(value("target_app_path", "BUGFIX_TARGET_APP_PATH", "apps/pc-web"))
+    workspaces = _workspace_configs(yaml_values, repo_root, target_repo, fallback_app_path)
+    active = _active_workspace(workspaces, active_workspace) if workspaces else None
     filters = _filter_rules(yaml_values, str(value("assignee", "BUGFIX_ASSIGNEE", "谢浩杰")))
     prompt = yaml_values.get("prompt", {})
     branch_summary_fields = _string_tuple(yaml_values.get("branch_summary_fields"), ("问题描述",))
-    global_max_concurrency = int(value("max_concurrency", "BUGFIX_MAX_CONCURRENCY", active.max_concurrency))
+    global_max_concurrency = int(value("max_concurrency", "BUGFIX_MAX_CONCURRENCY", active.max_concurrency if active else 2))
     return Config(
         excel_path=_path(value("excel_path", "BUGFIX_EXCEL_PATH", "/Users/xiehaojie/Desktop/亦城数智人在线清单.xlsx"), repo_root),
         sheet_name=str(value("sheet_name", "BUGFIX_SHEET_NAME", "在线问题清单")),
         assignee=str(value("assignee", "BUGFIX_ASSIGNEE", "谢浩杰")),
-        target_repo=active.target_repo,
-        target_app_path=active.target_app_path,
+        target_repo=active.target_repo if active else target_repo,
+        target_app_path=active.target_app_path if active else fallback_app_path,
         worktree_root=worktree_root,
         runs_root=runs_root,
         logs_root=logs_root,
         launchd_label=str(value("launchd_label", "BUGFIX_LAUNCHD_LABEL", "local.bugfix-automation.nightly")),
-        codex_bin=str(value("codex_bin", "BUGFIX_CODEX_BIN", "codex")),
+        cli_tool=str(value("cli_tool", "BUGFIX_CLI_TOOL", value("codex_bin", "BUGFIX_CODEX_BIN", "codex"))),
         schedule_hour=int(os.environ.get("BUGFIX_SCHEDULE_HOUR", schedule.get("hour", 22))),
         schedule_minute=int(os.environ.get("BUGFIX_SCHEDULE_MINUTE", schedule.get("minute", 0))),
         approval_web_port=int(value("approval_web_port", "BUGFIX_APPROVAL_WEB_PORT", 8765)),
         approval_api_port=int(value("approval_api_port", "BUGFIX_APPROVAL_API_PORT", 8766)),
         excel_processed_status_column=str(value("excel_processed_status_column", "BUGFIX_EXCEL_PROCESSED_STATUS_COLUMN", "对接人状态")),
         excel_processed_status_value=str(value("excel_processed_status_value", "BUGFIX_EXCEL_PROCESSED_STATUS_VALUE", "已处理")),
-        active_workspace=active.id,
+        active_workspace=active.id if active else "",
         workspaces=workspaces,
         filters=filters,
         branch_summary_fields=branch_summary_fields,
         prompt_fields=_string_tuple(prompt.get("fields"), DEFAULT_PROMPT_FIELDS),
         prompt_template=str(prompt.get("template", DEFAULT_PROMPT_TEMPLATE)),
-        prompt_context_paths=(*_string_tuple(prompt.get("context_paths"), ()), *active.prompt_context_paths),
+        prompt_context_paths=(*_string_tuple(prompt.get("context_paths"), ()), *(active.prompt_context_paths if active else ())),
         max_concurrency=max(1, min(int(os.environ.get("BUGFIX_MAX_CONCURRENCY", global_max_concurrency)), 8)),
+        validation_target_branches=_string_tuple(value("validation_target_branches", "BUGFIX_VALIDATION_TARGET_BRANCHES", ("main", "master", "develop"))),
     )
 
 
@@ -132,7 +137,9 @@ def _read_config_yaml(path: Path) -> dict[str, Any]:
     return _parse_yaml_subset(path.read_text(encoding="utf-8").splitlines())
 
 
-def _parse_scalar(value: str) -> str | int | bool:
+def _parse_scalar(value: str) -> str | int | bool | list:
+    if value == "[]":
+        return []
     if value in {"true", "True"}:
         return True
     if value in {"false", "False"}:
@@ -151,9 +158,33 @@ def _update_yaml_lines(lines: list[str], updates: dict[str, Any]) -> list[str]:
     for key, value in updates.items():
         if isinstance(value, dict):
             next_lines = _set_yaml_section(next_lines, key, value)
+        elif isinstance(value, list):
+            next_lines = _set_yaml_top_list(next_lines, key, value)
         else:
             next_lines = _set_yaml_scalar(next_lines, key, value)
     return next_lines
+
+
+def _set_yaml_top_list(lines: list[str], key: str, value: list) -> list[str]:
+    """Replace a top-level list section in YAML (e.g. filters)."""
+    key_index: int | None = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or line.startswith(" "):
+            continue
+        current_key = line.split(":", 1)[0].strip()
+        if current_key == key:
+            key_index = i
+            break
+    rendered = _render_yaml_field(key, value, 0)
+    if key_index is None:
+        return [*lines, "", *rendered]
+    end_index = len(lines)
+    for i in range(key_index + 1, len(lines)):
+        if lines[i].strip() and not lines[i].startswith(" "):
+            end_index = i
+            break
+    return [*lines[:key_index], *rendered, *lines[end_index:]]
 
 
 def _set_yaml_scalar(lines: list[str], key: str, value: Any) -> list[str]:
@@ -222,6 +253,8 @@ def _render_yaml_field(key: str, value: Any, indent: int = 0) -> list[str]:
             lines.extend(_render_yaml_field(str(child_key), child_value, indent + 2))
         return lines
     if isinstance(value, (list, tuple)):
+        if not value:
+            return [f"{prefix}{key}: []"]
         lines = [f"{prefix}{key}:"]
         for item in value:
             if isinstance(item, dict):
@@ -264,6 +297,7 @@ DEFAULT_PROMPT_TEMPLATE = """请按下面流程修复：
 
 
 def _workspace_configs(values: dict[str, Any], repo_root: Path, fallback_repo: Path, fallback_app: str) -> tuple[WorkspaceConfig, ...]:
+    has_workspaces_key = "workspaces" in values
     raw_workspaces = values.get("workspaces")
     if not isinstance(raw_workspaces, list):
         raw_workspaces = []
@@ -273,20 +307,32 @@ def _workspace_configs(values: dict[str, Any], repo_root: Path, fallback_repo: P
             continue
         workspace_id = str(item.get("id") or f"workspace-{index + 1}")
         target_app_path = str(item.get("target_app_path") or fallback_app)
+        raw_repos = item.get("repo_paths") or item.get("target_repo") or fallback_repo
+        if isinstance(raw_repos, list):
+            repo_paths = tuple(_path(r, repo_root) for r in raw_repos if r)
+        else:
+            repo_paths = (_path(raw_repos, repo_root),)
+        primary_repo = repo_paths[0] if repo_paths else _path(fallback_repo, repo_root)
         parsed.append(
             WorkspaceConfig(
                 id=workspace_id,
                 name=str(item.get("name") or workspace_id),
-                target_repo=_path(item.get("target_repo") or fallback_repo, repo_root),
+                target_repo=primary_repo,
                 target_app_path=target_app_path,
                 scope_paths=_string_tuple(item.get("scope_paths"), (target_app_path,)),
                 verify_commands=_command_tuple(item.get("verify_commands")),
                 prompt_context_paths=_string_tuple(item.get("prompt_context_paths"), ()),
                 max_concurrency=int(item.get("max_concurrency") or values.get("max_concurrency") or 2),
+                scope=str(item.get("scope") or "frontend"),
+                repo_paths=repo_paths,
             )
         )
     if parsed:
         return tuple(parsed)
+    # Only fall back to the default workspace if the key was never written to YAML.
+    # If the key is present but empty (user deleted all workspaces), return empty tuple.
+    if has_workspaces_key:
+        return ()
     return (
         WorkspaceConfig(
             id="pc-web",
@@ -354,8 +400,15 @@ def _string_tuple(value: Any, default: tuple[str, ...] = ()) -> tuple[str, ...]:
 
 
 def _command_tuple(value: Any) -> tuple[tuple[str, ...], ...]:
+    if value is None or value == "" or value == []:
+        return ()
     if not isinstance(value, list):
-        return (("npm", "run", "lint"), ("npm", "run", "build"))
+        # Accept comma-separated string for back-compat
+        if isinstance(value, str):
+            parts = [p.strip() for p in value.split(",") if p.strip()]
+            value = parts
+        else:
+            return ()
     commands: list[tuple[str, ...]] = []
     for item in value:
         if isinstance(item, str):
@@ -366,7 +419,7 @@ def _command_tuple(value: Any) -> tuple[tuple[str, ...], ...]:
             parts = tuple(str(part) for part in item if str(part))
             if parts:
                 commands.append(parts)
-    return tuple(commands) or (("npm", "run", "lint"), ("npm", "run", "build"))
+    return tuple(commands)
 
 
 def _parse_yaml_subset(lines: list[str]) -> dict[str, Any]:

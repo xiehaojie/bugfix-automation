@@ -8,13 +8,14 @@ from typing import Any
 import os
 import threading
 
+from bugfix_automation.codex_summary import branch_name_from_summary, generate_codex_change_summary
 from bugfix_automation.config import Config, active_workspace_config
 from bugfix_automation.excel_reader import read_sheet
 from bugfix_automation.filtering import BugRecord, filter_bugs, make_branch_name
 from bugfix_automation.images import export_bug_images
 from bugfix_automation.prompt import render_codex_prompt
 from bugfix_automation.reporter import write_reports
-from bugfix_automation.task_state import is_task_active, set_task_state
+from bugfix_automation.task_state import is_task_active, rename_task_state, set_task_state
 from bugfix_automation.worktree import (
     changed_paths,
     create_no_push_git_wrapper,
@@ -22,6 +23,7 @@ from bugfix_automation.worktree import (
     has_app_changes,
     install_project_agents,
     out_of_scope_paths,
+    rename_current_branch,
     branch_exists,
     branch_worktree_path,
     worktree_path_for_branch,
@@ -130,9 +132,10 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
             context_paths=config.prompt_context_paths,
             workspace_name=workspace.name,
             image_paths=image_paths,
+            scope=workspace.scope,
         )
-        set_task_state(config, branch, "running", bug, detail="Codex 正在分析并尝试修复。", phase="codex", image_paths=image_paths)
-        _run(codex_command(config.codex_bin, str(worktree_path), prompt, image_paths), cwd=worktree_path, path_prefix=git_wrapper_dir, stdin_text=prompt, log_path=log_path)
+        set_task_state(config, branch, "running", bug, detail="AI 正在分析并尝试修复。", phase="codex", image_paths=image_paths)
+        _run(ai_cli_command(config.cli_tool, str(worktree_path), prompt, image_paths), cwd=worktree_path, path_prefix=git_wrapper_dir, stdin_text=prompt, log_path=log_path)
         assert_scope_clean(changed_paths(worktree_path), config.target_app_path)
         set_task_state(config, branch, "verifying", bug, detail="Codex 已结束，正在运行验证命令。", phase="verify", image_paths=image_paths)
         _verify_frontend(worktree_path, config, log_path)
@@ -142,6 +145,7 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
             set_task_state(config, branch, result["status"], bug, detail=result["detail"], phase="done", image_paths=image_paths)
             return result
         changed_files = tracked_changed_files(worktree_path, config.target_app_path)
+        branch, log_path = _rename_branch_from_codex_summary(config, worktree_path, bug, branch, log_path)
         result = _result(
             bug,
             "pending-approval",
@@ -162,12 +166,10 @@ def process_bug(config: Config, bug: BugRecord, branch: str, image_paths: list[P
         return result
 
 
-def codex_command(codex_bin: str, worktree_path: str, prompt: str, image_paths: list[Path] | None = None) -> list[str]:
+def ai_cli_command(cli_tool: str, worktree_path: str, prompt: str, image_paths: list[Path] | None = None) -> list[str]:
     command = [
-        codex_bin,
+        cli_tool,
         "exec",
-        "--sandbox",
-        "workspace-write",
         "--cd",
         worktree_path,
     ]
@@ -177,6 +179,10 @@ def codex_command(codex_bin: str, worktree_path: str, prompt: str, image_paths: 
     return command
 
 
+# Backward-compatible alias
+codex_command = ai_cli_command
+
+
 def assert_scope_clean(paths: list[str], target_app_path: str) -> None:
     unsafe_paths = out_of_scope_paths(paths, target_app_path)
     if unsafe_paths:
@@ -184,8 +190,12 @@ def assert_scope_clean(paths: list[str], target_app_path: str) -> None:
 
 
 def _verify_frontend(worktree_path: Path, config: Config, log_path: Path | None = None) -> None:
+    workspace = active_workspace_config(config)
+    if not workspace.verify_commands:
+        # No verify commands configured: trust the AI to self-verify per its prompt.
+        return
     app_path = worktree_path / config.target_app_path
-    for command in active_workspace_config(config).verify_commands:
+    for command in workspace.verify_commands:
         _run(list(command), cwd=app_path, log_path=log_path)
 
 
@@ -206,6 +216,38 @@ def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_t
 def codex_log_path(config: Config, branch: str) -> Path:
     safe = branch.replace("/", "-")
     return config.logs_root / "codex" / f"{safe}.log"
+
+
+def _rename_branch_from_codex_summary(
+    config: Config,
+    worktree_path: Path,
+    bug: BugRecord,
+    branch: str,
+    log_path: Path | None,
+) -> tuple[str, Path | None]:
+    summary = generate_codex_change_summary(config, worktree_path, bug, config.target_app_path)
+    next_branch = _available_codex_branch(config, branch_name_from_summary(bug.issue_id, summary), branch)
+    if next_branch == branch:
+        return branch, log_path
+    rename_current_branch(worktree_path, next_branch)
+    rename_task_state(config, branch, next_branch)
+    if log_path is None:
+        return next_branch, None
+    next_log_path = codex_log_path(config, next_branch)
+    if log_path.exists() and next_log_path != log_path:
+        next_log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.replace(next_log_path)
+    return next_branch, next_log_path
+
+
+def _available_codex_branch(config: Config, desired_branch: str, current_branch: str) -> str:
+    if desired_branch == current_branch or not branch_exists(config.target_repo, desired_branch):
+        return desired_branch
+    for index in range(2, 100):
+        candidate = f"{desired_branch}-{index}"
+        if not branch_exists(config.target_repo, candidate):
+            return candidate
+    return f"{desired_branch}-{datetime.now().strftime('%Y%m%d%H%M')}"
 
 
 def _result(

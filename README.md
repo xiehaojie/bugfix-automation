@@ -6,6 +6,16 @@
 
 它不会主动 push 到远端。
 
+## 依赖安装
+
+后端审批 API 使用 FastAPI，首次运行前先安装 Python 依赖：
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+审批台前端依赖仍在 `approval-web/package.json` 中；启动 `approval-server` 时如果没有 `node_modules`，工具会自动在 `approval-web` 里执行 `npm install`。
+
 ## 配置入口
 
 优先改仓库根目录的 [config.yaml](/Users/xiehaojie/code/bugfix-automation/config.yaml)：
@@ -25,7 +35,7 @@ runs_root: runs
 logs_root: logs
 
 launchd_label: local.bugfix-automation.nightly
-codex_bin: codex
+cli_tool: codex
 
 approval_web_port: 8765
 approval_api_port: 8766
@@ -81,7 +91,7 @@ BUGFIX_APPROVAL_WEB_PORT=8765
 BUGFIX_APPROVAL_API_PORT=8766
 BUGFIX_EXCEL_PROCESSED_STATUS_COLUMN=对接人状态
 BUGFIX_EXCEL_PROCESSED_STATUS_VALUE=已处理
-BUGFIX_CODEX_BIN=codex
+BUGFIX_CLI_TOOL=codex
 ```
 
 配置读取顺序是：

@@ -9,6 +9,7 @@ from bugfix_automation.filtering import make_branch_name
 from bugfix_automation.runner import list_bugs, run_once, run_one
 from bugfix_automation.scheduler import install_launchd_at
 from bugfix_automation.approval_server import serve, serve_api_only
+from bugfix_automation.application import integration_service
 
 
 def main() -> int:
@@ -28,6 +29,22 @@ def main() -> int:
     approval_api_parser = subparsers.add_parser("approval-api", help="只启动审批 API")
     approval_api_parser.add_argument("--host", default="127.0.0.1")
     approval_api_parser.add_argument("--port", type=int, default=None)
+    # Integration subcommands
+    int_parser = subparsers.add_parser("integration", help="本地 PR 集成队列操作")
+    int_sub = int_parser.add_subparsers(dest="int_command", required=True)
+    int_create = int_sub.add_parser("create", help="创建集成单")
+    int_create.add_argument("--target-branch", required=True, help="目标分支")
+    int_create.add_argument("--branches", nargs="+", required=True, help="待集成的 fix/* 分支")
+    int_create.add_argument("--workspace", default=None, help="workspace ID")
+    int_sub.add_parser("list", help="列出所有集成单")
+    int_start = int_sub.add_parser("start", help="开始集成")
+    int_start.add_argument("run_id", help="集成单 ID")
+    int_confirm = int_sub.add_parser("confirm", help="确认提交")
+    int_confirm.add_argument("run_id", help="集成单 ID")
+    int_cleanup = int_sub.add_parser("cleanup", help="清理已合入来源分支")
+    int_cleanup.add_argument("run_id", help="集成单 ID")
+    int_abort = int_sub.add_parser("abort", help="中止集成")
+    int_abort.add_argument("run_id", help="集成单 ID")
     launchd_parser = subparsers.add_parser("install-launchd", help="安装 macOS 定时任务")
     launchd_parser.add_argument("--hour", type=int, default=None, help="每天几点执行，0-23")
     launchd_parser.add_argument("--minute", type=int, default=None, help="每小时第几分钟执行，0-59")
@@ -84,7 +101,51 @@ def main() -> int:
     if args.command == "approval-api":
         serve_api_only(config, host=args.host, port=args.port)
         return 0
+    if args.command == "integration":
+        return _handle_integration(config, args)
     parser.error("未知命令")
+    return 2
+
+
+def _handle_integration(config, args) -> int:
+    if args.int_command == "list":
+        runs = integration_service.list_runs(config)
+        for run in runs:
+            print(f"  {run['run_id']}  [{run['status']}]  target={run['target_branch']}  items={len(run.get('items', []))}")
+        if not runs:
+            print("没有集成单。")
+        return 0
+    if args.int_command == "create":
+        workspace_id = args.workspace or config.active_workspace
+        data = integration_service.create_run(config, workspace_id, args.target_branch, args.branches)
+        print(f"已创建集成单: {data['run_id']}")
+        print(f"  目标分支: {data['target_branch']}")
+        print(f"  集成分支: {data['integration_branch']}")
+        print(f"  来源分支: {len(data['items'])} 个")
+        return 0
+    if args.int_command == "start":
+        data = integration_service.start_run(config, args.run_id)
+        applied = sum(1 for item in data["items"] if item["status"] == "applied")
+        failed = sum(1 for item in data["items"] if item["status"] == "conflict")
+        print(f"集成完成: {data['status']}")
+        print(f"  应用成功: {applied}  冲突: {failed}")
+        print(f"  验证: {data.get('verify', {}).get('status', 'N/A')}")
+        return 0
+    if args.int_command == "confirm":
+        data = integration_service.confirm_run(config, args.run_id)
+        print(f"已确认提交: {data['final_commit']}")
+        return 0
+    if args.int_command == "cleanup":
+        data = integration_service.cleanup_run(config, args.run_id)
+        cleaned = data.get("cleaned_branches", [])
+        print(f"已清理 {len(cleaned)} 个来源分支:")
+        for b in cleaned:
+            print(f"  - {b}")
+        return 0
+    if args.int_command == "abort":
+        integration_service.abort_run(config, args.run_id)
+        print("已中止集成单。")
+        return 0
     return 2
 
 

@@ -7,8 +7,9 @@ from datetime import datetime
 from pathlib import Path
 import subprocess
 
-from bugfix_automation.approval import approve_fix, count_pending, diff_to_html, parse_worktree_list
-from bugfix_automation.approval_api import _bug_payload, _upload_excel
+from bugfix_automation.application.bug_service import bug_payload
+from bugfix_automation.application.excel_service import upload_excel_from_multipart
+from bugfix_automation.approval import approve_fix, count_pending, parse_worktree_list
 from bugfix_automation.config import Config
 from bugfix_automation.filtering import filter_bugs
 
@@ -44,20 +45,6 @@ branch refs/heads/feature/demo
 
         self.assertEqual(count_pending(fixes), 3)
 
-    def test_diff_to_html_marks_added_and_removed_lines(self) -> None:
-        html = diff_to_html("""diff --git a/a b/a
---- a/a
-+++ b/a
-@@ -1 +1 @@
--old
-+new
-""")
-
-        self.assertIn("diff-line-del", html)
-        self.assertIn("diff-line-add", html)
-        self.assertIn("old", html)
-        self.assertIn("new", html)
-
     def test_approve_fix_commits_and_removes_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -84,7 +71,7 @@ branch refs/heads/feature/demo
                 runs_root=root / "runs",
                 logs_root=root / "logs",
                 launchd_label="local.test",
-                codex_bin="codex",
+                cli_tool="codex",
                 schedule_hour=22,
                 schedule_minute=0,
                 approval_web_port=8765,
@@ -112,7 +99,7 @@ branch refs/heads/feature/demo
                 runs_root=root / "runs",
                 logs_root=root / "logs",
                 launchd_label="local.test",
-                codex_bin="codex",
+                cli_tool="codex",
                 schedule_hour=22,
                 schedule_minute=0,
                 approval_web_port=8765,
@@ -125,11 +112,11 @@ branch refs/heads/feature/demo
             ]
             with unittest.mock.patch("bugfix_automation.runner.read_sheet", return_value=rows):
                 image_path = root / "runs" / "approval-images" / "fix-1-demo" / "row-46-image-1.png"
-                with unittest.mock.patch("bugfix_automation.approval_api.export_bug_images", return_value=[image_path]):
-                    with unittest.mock.patch("bugfix_automation.approval_api.datetime") as fake_datetime:
+                with unittest.mock.patch("bugfix_automation.application.bug_service.export_bug_images", return_value=[image_path]):
+                    with unittest.mock.patch("bugfix_automation.application.bug_service.datetime") as fake_datetime:
                         fake_datetime.now.return_value = datetime(2026, 5, 12, 9, 30)
                         fake_datetime.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
-                        bugs = _bug_payload(config)
+                        bugs = bug_payload(config)
 
         self.assertEqual(len(bugs), 1)
         self.assertEqual(bugs[0]["issue_id"], "1")
@@ -153,7 +140,7 @@ branch refs/heads/feature/demo
                 runs_root=root / "runs",
                 logs_root=root / "logs",
                 launchd_label="local.test",
-                codex_bin="codex",
+                cli_tool="codex",
                 schedule_hour=22,
                 schedule_minute=0,
                 approval_web_port=8765,
@@ -163,11 +150,11 @@ branch refs/heads/feature/demo
                 {"_excel_row": "132", "序号": "37", "提出人状态": "待处理", "来源系统": "小亦APP", "对接人": "谢浩杰", "对接人状态": "处理中", "问题描述": "待办去重"},
             ]
             bug = filter_bugs(rows, assignee="谢浩杰")[0]
-            with unittest.mock.patch("bugfix_automation.approval_api.list_bugs", return_value=[bug]):
-                with unittest.mock.patch("bugfix_automation.approval_api.task_state", return_value={"status": "running", "phase": "codex", "detail": "执行中", "updated_at": "2026-05-12T10:00:00"}):
-                    with unittest.mock.patch("bugfix_automation.approval_api.is_task_active", return_value=True):
-                        with unittest.mock.patch("bugfix_automation.approval_api.export_bug_images", return_value=[]):
-                            bugs = _bug_payload(config)
+            with unittest.mock.patch("bugfix_automation.application.bug_service.list_bugs", return_value=[bug]):
+                with unittest.mock.patch("bugfix_automation.application.bug_service.task_state", return_value={"status": "running", "phase": "codex", "detail": "执行中", "updated_at": "2026-05-12T10:00:00"}):
+                    with unittest.mock.patch("bugfix_automation.application.bug_service.is_task_active", return_value=True):
+                        with unittest.mock.patch("bugfix_automation.application.bug_service.export_bug_images", return_value=[]):
+                            bugs = bug_payload(config)
 
         self.assertTrue(bugs[0]["active"])
         self.assertEqual(bugs[0]["task_status"], "running")
@@ -187,7 +174,7 @@ branch refs/heads/feature/demo
                 runs_root=root / "runs",
                 logs_root=root / "logs",
                 launchd_label="local.test",
-                codex_bin="codex",
+                cli_tool="codex",
                 schedule_hour=22,
                 schedule_minute=0,
                 approval_web_port=8765,
@@ -232,9 +219,12 @@ branch refs/heads/feature/demo
                     }
 
             handler = FakeHandler(body)
-            with unittest.mock.patch("bugfix_automation.approval_api.repo_root_path", return_value=root):
-                with unittest.mock.patch("bugfix_automation.approval_api.update_config_yaml") as update_yaml:
-                    result = _upload_excel(handler)
+            content_type = handler.headers["Content-Type"]
+            content_length = int(handler.headers["Content-Length"])
+            payload = handler.rfile.read(content_length)
+            with unittest.mock.patch("bugfix_automation.application.excel_service.repo_root_path", return_value=root):
+                with unittest.mock.patch("bugfix_automation.application.excel_service.update_config_yaml") as update_yaml:
+                    result = upload_excel_from_multipart(payload, content_type)
 
         self.assertTrue(result["ok"])
         self.assertTrue(result["excel_path"].startswith(str(root / "uploads")))

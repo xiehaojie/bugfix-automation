@@ -27,7 +27,7 @@ worktree_root: .target-worktrees
 runs_root: runs
 logs_root: logs
 launchd_label: local.demo
-codex_bin: /tmp/codex
+cli_tool: /tmp/codex
 approval_web_port: 9001
 approval_api_port: 9002
 excel_processed_status_column: 对接人状态

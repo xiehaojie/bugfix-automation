@@ -5,18 +5,18 @@ import plistlib
 from unittest.mock import patch
 
 from bugfix_automation.config import Config
-from bugfix_automation.scheduler import install_launchd_at, launchd_status, resolve_codex_bin, uninstall_launchd
+from bugfix_automation.scheduler import install_launchd_at, launchd_status, resolve_cli_tool, uninstall_launchd
 
 
 class SchedulerTest(unittest.TestCase):
-    def test_resolve_codex_bin_fails_without_absolute_path(self) -> None:
+    def test_resolve_cli_tool_fails_without_absolute_path(self) -> None:
         with patch("bugfix_automation.scheduler.shutil.which", return_value=None):
             with patch.object(Path, "exists", return_value=False):
-                with self.assertRaisesRegex(FileNotFoundError, "没有找到 Codex CLI"):
-                    resolve_codex_bin("codex")
+                with self.assertRaisesRegex(FileNotFoundError, "没有找到 CLI 工具"):
+                    resolve_cli_tool("codex")
 
-    def test_resolve_codex_bin_keeps_absolute_path(self) -> None:
-        self.assertEqual(resolve_codex_bin("/tmp/codex"), "/tmp/codex")
+    def test_resolve_cli_tool_keeps_absolute_path(self) -> None:
+        self.assertEqual(resolve_cli_tool("/tmp/codex"), "/tmp/codex")
 
     def test_launchd_status_reports_configured_schedule(self) -> None:
         config = Config(
@@ -29,7 +29,7 @@ class SchedulerTest(unittest.TestCase):
             runs_root=Path("/tmp/logs"),
             logs_root=Path("/tmp/logs"),
             launchd_label="local.test",
-            codex_bin="codex",
+            cli_tool="codex",
             schedule_hour=21,
             schedule_minute=30,
             approval_web_port=8765,
@@ -54,7 +54,7 @@ class SchedulerTest(unittest.TestCase):
             runs_root=Path("/tmp/logs"),
             logs_root=Path("/tmp/logs"),
             launchd_label="local.test",
-            codex_bin="/tmp/codex",
+            cli_tool="/tmp/codex",
             schedule_hour=22,
             schedule_minute=0,
             approval_web_port=8765,
@@ -82,7 +82,7 @@ class SchedulerTest(unittest.TestCase):
             runs_root=Path("/tmp/logs"),
             logs_root=Path("/tmp/logs"),
             launchd_label="local.test",
-            codex_bin="codex",
+            cli_tool="codex",
             schedule_hour=22,
             schedule_minute=0,
             approval_web_port=8765,

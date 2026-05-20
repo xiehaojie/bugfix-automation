@@ -20,7 +20,7 @@ def plist_payload(config: Config) -> dict:
     repo_root = Path(__file__).resolve().parents[1]
     config.logs_root.mkdir(parents=True, exist_ok=True)
     env = {"PATH": os.environ.get("PATH", "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin")}
-    env["BUGFIX_CODEX_BIN"] = resolve_codex_bin(config.codex_bin)
+    env["BUGFIX_CLI_TOOL"] = resolve_cli_tool(config.cli_tool)
     return {
         "Label": config.launchd_label,
         "ProgramArguments": ["/usr/bin/python3", "-m", "bugfix_automation.cli", "run-once"],
@@ -108,22 +108,26 @@ def start_manual_run(config: Config) -> dict:
     return {"pid": process.pid, "log_path": str(log_path)}
 
 
-def resolve_codex_bin(codex_bin: str) -> str:
-    candidate = Path(codex_bin).expanduser()
+def resolve_cli_tool(cli_tool: str) -> str:
+    candidate = Path(cli_tool).expanduser()
     if candidate.is_absolute():
         return str(candidate)
-    found = shutil.which(codex_bin)
+    found = shutil.which(cli_tool)
     if found:
         return found
     known = [
-        Path.home() / ".nvm" / "versions" / "node" / "v24.14.1" / "bin" / codex_bin,
-        Path("/opt/homebrew/bin") / codex_bin,
-        Path("/usr/local/bin") / codex_bin,
+        Path.home() / ".nvm" / "versions" / "node" / "v24.14.1" / "bin" / cli_tool,
+        Path("/opt/homebrew/bin") / cli_tool,
+        Path("/usr/local/bin") / cli_tool,
     ]
     for path in known:
         if path.exists():
             return str(path)
-    raise FileNotFoundError("没有找到 Codex CLI。请在 config.yaml 中配置 codex_bin，或设置 BUGFIX_CODEX_BIN 为绝对路径。")
+    raise FileNotFoundError(f"没有找到 CLI 工具 '{cli_tool}'。请在 config.yaml 中配置 cli_tool，或设置 BUGFIX_CLI_TOOL 为绝对路径。")
+
+
+# Backward-compatible alias
+resolve_codex_bin = resolve_cli_tool
 
 
 def _plist_schedule(path: Path, default_hour: int, default_minute: int) -> tuple[int, int]:

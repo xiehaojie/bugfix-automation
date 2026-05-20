@@ -1,10 +1,10 @@
 # 夜间 Bug 自动修复配置
 # 环境变量优先级更高，适合临时覆盖；平时直接改这个文件即可。
 
-excel_path: /Users/xiehaojie/code/bugfix-automation/uploads/亦城数智人在线清单-20260511-235147-440740.xlsx
+excel_path: /Users/xiehaojie/Desktop/亦城数智人在线清单.xlsx
 sheet_name: 在线问题清单
 assignee: 谢浩杰
-active_workspace: pc-web
+active_workspace: 
 max_concurrency: 2
 
 target_repo: /Users/xiehaojie/code/monorepo
@@ -15,7 +15,7 @@ runs_root: runs
 logs_root: logs
 
 launchd_label: local.bugfix-automation.nightly
-codex_bin: codex
+cli_tool: codex
 
 approval_web_port: 8765
 approval_api_port: 8766
@@ -24,29 +24,30 @@ excel_processed_status_column: 对接人状态
 excel_processed_status_value: 已处理
 
 workspaces:
-  - id: pc-web
-    name: PC Web
+  - id: 亦城数智人前端
+    name: 亦城数智人前端
     target_repo: /Users/xiehaojie/code/monorepo
-    target_app_path: apps/pc-web
-    scope_paths: apps/pc-web
-    verify_commands: npm run lint,npm run build
-    prompt_context_paths:
+    repo_paths:
+      - /Users/xiehaojie/code/monorepo
+    target_app_path: .
+    scope_paths: .
+    verify_commands: 
+    prompt_context_paths: 
     max_concurrency: 2
-
+    scope: frontend
 filters:
   - field: 对接人
     op: equals
     value: 谢浩杰
-  - field: 对接人状态
-    op: not_in
-    values: 已解决,已处理
   - field: 来源系统
-    op: all_in
-    values: 小亦PC,小亦APP
-  - field: 提出人状态
     op: in
-    values: 待处理,处理中
-
+    values: 小亦PC,小亦APP
+  - field: 对接人状态
+    op: not_equals
+    value: 已解决
+  - field: 提出人状态
+    op: not_equals
+    value: 已解决
 branch_summary_fields:
   - 问题描述
 

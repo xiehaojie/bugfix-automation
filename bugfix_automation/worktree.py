@@ -37,6 +37,10 @@ def branch_worktree_path(target_repo: Path, branch: str) -> Path | None:
     return None
 
 
+def rename_current_branch(path: Path, next_branch: str) -> None:
+    subprocess.run(["git", "branch", "-m", next_branch], cwd=path, check=True)
+
+
 def install_project_agents(worktree_path: Path, automation_repo: Path) -> None:
     source = automation_repo / ".codex" / "agents"
     if not source.exists():

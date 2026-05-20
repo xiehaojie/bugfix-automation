@@ -89,6 +89,16 @@ def set_task_state(
         return next_state
 
 
+def rename_task_state(config: Config, old_branch: str, new_branch: str) -> None:
+    with _LOCK:
+        states = load_task_states(config)
+        state = states.pop(old_branch, {}) if isinstance(states.get(old_branch), dict) else {}
+        if state:
+            state["branch"] = new_branch
+            states[new_branch] = state
+            _write_states(task_state_path(config), states)
+
+
 def _write_states(path: Path, states: dict[str, dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(f"{path.suffix}.tmp")
