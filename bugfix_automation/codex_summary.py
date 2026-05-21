@@ -5,6 +5,7 @@ import re
 import subprocess
 import unicodedata
 
+from bugfix_automation.ai_cli import ai_cli_print_command
 from bugfix_automation.config import Config
 from bugfix_automation.filtering import BugRecord
 from bugfix_automation.prompt import PROMPTS_DIR
@@ -40,13 +41,8 @@ def generate_codex_change_summary(config: Config, worktree_path: Path, bug: BugR
     )
     try:
         result = subprocess.run(
-            [
-                config.cli_tool,
-                "exec",
-                "--cd",
-                str(worktree_path),
-                "-",
-            ],
+            ai_cli_print_command(config.cli_tool),
+            cwd=worktree_path,
             input=prompt,
             text=True,
             capture_output=True,

@@ -3,11 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bugfix_automation.config import CanonicalFieldMapping, FilterRule
+from bugfix_automation.config import CanonicalFieldMapping, Config, FilterRule
 from bugfix_automation.filtering import filter_bugs, make_branch_name
 from bugfix_automation.prompt import render_codex_prompt
 from bugfix_automation.reporter import conflict_index, write_reports
-from bugfix_automation.runner import assert_scope_clean, codex_command
+from bugfix_automation.ai_cli import ai_cli_print_command
+from bugfix_automation.runner import ai_cli_command, assert_scope_clean, codex_command, codex_log_path
 from bugfix_automation.worktree import out_of_scope_paths
 
 
@@ -163,6 +164,25 @@ class FilteringPromptReportTest(unittest.TestCase):
         self.assertIn("补充初始化提示词", prompt)
         self.assertIn("apps/pc-web/src/app", prompt)
         self.assertIn("工作区: PC Web", prompt)
+
+    def test_prompt_can_name_claude_instead_of_codex(self) -> None:
+        bug = filter_bugs([
+            {
+                "_excel_row": "2",
+                "序号": "87",
+                "提出人状态": "处理中",
+                "来源系统": "小亦PC",
+                "对接人": "谢浩杰",
+                "对接人状态": "",
+                "问题描述": "账号离线状态",
+            }
+        ], assignee="谢浩杰")[0]
+
+        prompt = render_codex_prompt(bug, target_app_path="apps/pc-web", ai_tool_label="Claude Code")
+
+        self.assertIn("Claude Code", prompt)
+        self.assertNotIn("本地自动化流程启动的 Codex", prompt)
+        self.assertNotIn("随本次 Codex 调用", prompt)
 
     def test_prompt_only_includes_selected_excel_fields(self) -> None:
         bug = filter_bugs([
@@ -356,6 +376,51 @@ class FilteringPromptReportTest(unittest.TestCase):
         self.assertIn("--cd", command)
         self.assertNotIn("--ask-for-approval", command)
         self.assertEqual(command[-1], "-")
+
+    def test_ai_cli_command_uses_claude_print_mode(self) -> None:
+        command = ai_cli_command("/usr/local/bin/claude", "/tmp/worktree", "prompt")
+
+        self.assertEqual(command[:2], ["/usr/local/bin/claude", "--print"])
+        self.assertIn("--permission-mode", command)
+        self.assertIn("bypassPermissions", command)
+        self.assertNotIn("exec", command)
+        self.assertNotIn("--cd", command)
+
+    def test_ai_cli_command_allows_claude_to_read_image_directories(self) -> None:
+        command = ai_cli_command(
+            "claude",
+            "/tmp/worktree",
+            "prompt",
+            [Path("/tmp/bug-images/one.png"), Path("/tmp/bug-images/two.jpg")],
+        )
+
+        self.assertIn("--add-dir", command)
+        self.assertIn("/tmp/bug-images", command)
+        self.assertNotIn("--image", command)
+
+    def test_ai_cli_print_command_uses_provider_specific_non_interactive_mode(self) -> None:
+        self.assertEqual(ai_cli_print_command("claude"), ["claude", "--print"])
+        self.assertEqual(ai_cli_print_command("codex"), ["codex", "exec", "-"])
+
+    def test_log_path_uses_configured_cli_directory(self) -> None:
+        config = Config(
+            excel_path=Path("/tmp/bugs.xlsx"),
+            sheet_name="Sheet1",
+            assignee="谢浩杰",
+            target_repo=Path("/tmp/repo"),
+            target_app_path="apps/pc-web",
+            worktree_root=Path("/tmp/worktrees"),
+            runs_root=Path("/tmp/runs"),
+            logs_root=Path("/tmp/logs"),
+            launchd_label="local.test",
+            cli_tool="claude",
+            schedule_hour=22,
+            schedule_minute=0,
+            approval_web_port=8765,
+            approval_api_port=8766,
+        )
+
+        self.assertEqual(codex_log_path(config, "fix/bug-1-demo"), Path("/tmp/logs/claude/fix-bug-1-demo.log"))
 
 
 if __name__ == "__main__":

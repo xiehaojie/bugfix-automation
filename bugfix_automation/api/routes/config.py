@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
+from bugfix_automation.ai_cli import ai_cli_kind, ai_cli_print_command
 from bugfix_automation.api.dependencies import get_config
 from bugfix_automation.api.schemas import ConfigUpdateRequest, FiltersUpdateRequest, WorkspaceAddRequest, WorkspaceRemoveRequest, WorkspaceSelectRequest
 from bugfix_automation.application.config_service import add_workspace, config_payload, remove_workspace, select_workspace, update_automation_config, update_filters
@@ -71,17 +72,17 @@ async def post_cli_test(payload: CliTestRequest, config: Config = Depends(get_co
     tool = payload.cli_tool.strip() or config.cli_tool
     test_prompt = "Reply with exactly: CONNECTED"
     try:
-        tool_name = Path(tool).stem
-        if tool_name == "claude":
+        if ai_cli_kind(tool) == "claude":
             proc = await asyncio.create_subprocess_exec(
-                tool, "-p", test_prompt, "--bare",
+                *ai_cli_print_command(tool),
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(test_prompt.encode()), timeout=30)
         else:
             proc = await asyncio.create_subprocess_exec(
-                tool, "exec", "-",
+                *ai_cli_print_command(tool),
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

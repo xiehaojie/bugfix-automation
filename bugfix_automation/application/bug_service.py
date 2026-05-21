@@ -11,6 +11,7 @@ from bugfix_automation.images import export_bug_images
 from bugfix_automation.prompt import render_codex_prompt
 from bugfix_automation.runner import list_bugs, run_one
 from bugfix_automation.task_state import is_task_active, set_task_state, task_state
+from bugfix_automation.ai_cli import ai_cli_label, ai_cli_print_command
 
 
 def bug_payload(config: Config) -> list[dict[str, Any]]:
@@ -110,6 +111,7 @@ def preview_prompt(config: Config, excel_row: int) -> dict[str, Any]:
         workspace_name=workspace.name if workspace else "",
         image_paths=images,
         scope=workspace.scope if workspace else "frontend",
+        ai_tool_label=ai_cli_label(config.cli_tool),
     )
     return {
         "ok": True,
@@ -125,7 +127,7 @@ def preview_prompt(config: Config, excel_row: int) -> dict[str, Any]:
 
 
 async def optimize_prompt(config: Config, excel_row: int, current_prompt: str) -> dict[str, Any]:
-    """Use Codex in read-only mode to optimize/rewrite the given prompt."""
+    """Use the configured AI CLI to optimize/rewrite the given prompt."""
     import asyncio
 
     from bugfix_automation.prompt import PROMPTS_DIR
@@ -145,7 +147,7 @@ async def optimize_prompt(config: Config, excel_row: int, current_prompt: str) -
     )
     try:
         proc = await asyncio.create_subprocess_exec(
-            config.cli_tool, "exec", "-",
+            *ai_cli_print_command(config.cli_tool),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -155,7 +157,7 @@ async def optimize_prompt(config: Config, excel_row: int, current_prompt: str) -
             timeout=120,
         )
         if proc.returncode != 0:
-            err_msg = _extract_codex_error(stderr.decode(errors="replace"))
+            err_msg = _extract_cli_error(stderr.decode(errors="replace"), config.cli_tool)
             return {"ok": False, "error": err_msg}
         optimized = stdout.decode(errors="replace").strip()
         if not optimized:
@@ -163,16 +165,17 @@ async def optimize_prompt(config: Config, excel_row: int, current_prompt: str) -
         return {"ok": True, "prompt": optimized}
     except asyncio.TimeoutError:
         proc.kill()
-        return {"ok": False, "error": "Codex 优化超时（120s）"}
+        return {"ok": False, "error": "AI 优化超时（120s）"}
     except OSError as exc:
-        return {"ok": False, "error": f"Codex 调用失败: {exc}"}
+        return {"ok": False, "error": f"AI CLI 调用失败: {exc}"}
     except Exception as exc:
         return {"ok": False, "error": f"优化失败: {type(exc).__name__}: {exc}"}
 
 
-def _extract_codex_error(stderr: str) -> str:
-    """Extract the most meaningful error line from codex stderr."""
+def _extract_cli_error(stderr: str, cli_tool: str) -> str:
+    """Extract the most meaningful error line from local AI CLI stderr."""
     for line in reversed(stderr.splitlines()):
         if line.startswith("ERROR:"):
             return line.removeprefix("ERROR:").strip()
-    return f"Codex 返回错误: {stderr[-200:]}" if stderr else "Codex 调用失败（未知错误）"
+    label = ai_cli_label(cli_tool)
+    return f"{label} 返回错误: {stderr[-200:]}" if stderr else f"{label} 调用失败（未知错误）"

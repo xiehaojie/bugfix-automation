@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 import json
-import shlex
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from bugfix_automation.ai_cli import ai_cli_print_command
 from bugfix_automation.config import CanonicalFieldMapping, Config, ExcelProfile, FilterRule, repo_root_path
 from bugfix_automation.excel_reader import read_sheet
 from bugfix_automation.storage.settings import set_setting
@@ -258,7 +258,7 @@ async def _run_cli_json(cli_tool: str, prompt_text: str) -> tuple[dict[str, Any]
     tool = cli_tool.strip()
     if not tool:
         raise ValueError("cli_tool 不能为空")
-    args = [*shlex.split(tool), "exec", "-"]
+    args = ai_cli_print_command(tool)
     try:
         proc = await asyncio.create_subprocess_exec(
             *args,

@@ -155,7 +155,7 @@ export function PromptPreview({ bug, onClose, onRunWithPrompt }: PromptPreviewPr
               onClick={() => onRunWithPrompt(bug)}
             >
               <Sparkles size={14} />
-              确认执行 Codex
+              确认执行 AI
             </button>
           </div>
         </footer>

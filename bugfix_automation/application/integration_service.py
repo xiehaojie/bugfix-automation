@@ -531,7 +531,7 @@ def _worktree_changed_files(worktree_path: Path, target_app_path: str) -> list[s
     rc, out, _ = _git_rc(worktree_path, ["status", "--porcelain", "--", target_app_path])
     if rc != 0:
         return []
-    automation_prefixes = (".codex/", ".bugfix-automation-bin/")
+    automation_prefixes = (".codex/", ".claude/", ".bugfix-automation-bin/")
     files: list[str] = []
     for line in out.splitlines():
         raw_path = line[3:]

@@ -10,6 +10,7 @@ from typing import Any
 import os
 import threading
 
+from bugfix_automation.ai_cli import ai_cli_command, ai_cli_label, ai_log_dir_name
 from bugfix_automation.codex_summary import branch_name_from_summary, generate_codex_change_summary
 from bugfix_automation.config import Config, active_workspace_config
 from bugfix_automation.excel_reader import read_sheet
@@ -64,10 +65,11 @@ def run_once(config: Config, dry_run: bool = False) -> tuple[Path, Path, Path]:
     operation_id = _create_run_operation(config, "run_once", status="running", summary=f"{len(bugs)} bugs matched")
     if dry_run:
         results = []
+        label = ai_cli_label(config.cli_tool)
         for bug in bugs:
             branch = make_branch_name(bug, config.branch_summary_fields, run_stamp)
             image_paths = export_bug_images(config.excel_path, bug, run_dir / "images" / branch.replace("/", "-"))
-            results.append(_result(bug, "dry-run", branch, "命中筛选规则；演练模式未创建 worktree，也未启动 Codex。", image_paths))
+            results.append(_result(bug, "dry-run", branch, f"命中筛选规则；演练模式未创建 worktree，也未启动 {label}。", image_paths))
         paths = write_reports(run_dir, results)
         finish_operation(config.storage_db_path, operation_id=operation_id, status="succeeded", summary=f"dry-run: {len(results)} bugs")
         return paths
@@ -157,6 +159,7 @@ def process_bug(
 ) -> dict[str, Any]:
     worktree_path: Path | None = None
     try:
+        label = ai_cli_label(config.cli_tool)
         set_task_state(config, branch, "running", bug, detail="开始准备 worktree。", phase="prepare", image_paths=image_paths, operation_id=operation_id)
         existing_path = worktree_path_for_branch(config.worktree_root, branch)
         if existing_path.exists():
@@ -189,6 +192,7 @@ def process_bug(
             workspace_name=workspace.name,
             image_paths=image_paths,
             scope=workspace.scope,
+            ai_tool_label=ai_cli_label(config.cli_tool),
         )
         set_task_state(config, branch, "running", bug, detail="AI 正在分析并尝试修复。", phase="codex", image_paths=image_paths, operation_id=operation_id)
         ai_session = _start_ai_session(config, operation_id, config.cli_tool, worktree_path, prompt, log_path)
@@ -201,7 +205,7 @@ def process_bug(
             _finish_ai_session(config, ai_session, log_path, branch, bug, status="succeeded")
         assert_scope_clean(changed_paths(worktree_path), config.target_app_path)
         if not has_app_changes(worktree_path, config.target_app_path):
-            result = _result(bug, "no-change", branch, "Codex 已结束，但没有产生本地改动。", image_paths, log_path=log_path)
+            result = _result(bug, "no-change", branch, f"{label} 已结束，但没有产生本地改动。", image_paths, log_path=log_path)
             set_task_state(config, branch, result["status"], bug, detail=result["detail"], phase="done", image_paths=image_paths, operation_id=operation_id)
             return result
         changed_files = tracked_changed_files(worktree_path, config.target_app_path)
@@ -319,20 +323,6 @@ def _finish_ai_session(
     )
 
 
-def ai_cli_command(cli_tool: str, worktree_path: str, prompt: str, image_paths: list[Path] | None = None) -> list[str]:
-    command = [
-        cli_tool,
-        "exec",
-        "--full-auto",
-        "--cd",
-        worktree_path,
-    ]
-    for image_path in image_paths or []:
-        command.extend(["--image", str(image_path)])
-    command.append("-")
-    return command
-
-
 # Backward-compatible alias
 codex_command = ai_cli_command
 
@@ -388,7 +378,7 @@ def _run(command: list[str], cwd: Path, path_prefix: str | Path | None = None, s
 
 def codex_log_path(config: Config, branch: str) -> Path:
     safe = branch.replace("/", "-")
-    return config.logs_root / "codex" / f"{safe}.log"
+    return config.logs_root / ai_log_dir_name(config.cli_tool) / f"{safe}.log"
 
 
 def _rename_branch_from_codex_summary(

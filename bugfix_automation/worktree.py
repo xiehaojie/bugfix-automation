@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 import shutil
 import os
+import tomllib
 
 
 def ensure_worktree(target_repo: Path, worktree_root: Path, branch: str) -> Path:
@@ -45,10 +46,41 @@ def install_project_agents(worktree_path: Path, automation_repo: Path) -> None:
     source = automation_repo / ".codex" / "agents"
     if not source.exists():
         return
-    target = worktree_path / ".codex" / "agents"
-    target.mkdir(parents=True, exist_ok=True)
+    codex_target = worktree_path / ".codex" / "agents"
+    claude_target = worktree_path / ".claude" / "agents"
+    codex_target.mkdir(parents=True, exist_ok=True)
+    claude_target.mkdir(parents=True, exist_ok=True)
     for agent_file in source.glob("*.toml"):
-        shutil.copy2(agent_file, target / agent_file.name)
+        shutil.copy2(agent_file, codex_target / agent_file.name)
+        claude_agent = _claude_agent_from_codex_toml(agent_file)
+        if claude_agent:
+            (claude_target / f"{agent_file.stem}.md").write_text(claude_agent, encoding="utf-8")
+
+
+def _claude_agent_from_codex_toml(agent_file: Path) -> str:
+    try:
+        payload = tomllib.loads(agent_file.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return ""
+    name = str(payload.get("name") or agent_file.stem)
+    description = str(payload.get("description") or "")
+    instructions = payload.get("instructions")
+    text = ""
+    if isinstance(instructions, dict):
+        text = str(instructions.get("text") or "")
+    if not text:
+        text = "Use this agent for focused bugfix automation work."
+    return (
+        "---\n"
+        f"name: {_frontmatter_scalar(name)}\n"
+        f"description: {_frontmatter_scalar(description)}\n"
+        "---\n\n"
+        f"{text.strip()}\n"
+    )
+
+
+def _frontmatter_scalar(value: str) -> str:
+    return value.replace("\n", " ").strip()
 
 
 def symlink_node_modules(worktree_path: Path, target_repo: Path) -> None:
@@ -82,7 +114,7 @@ def has_app_changes(path: Path, target_app_path: str) -> bool:
 
 def tracked_changed_files(path: Path, target_app_path: str) -> list[str]:
     result = subprocess.run(["git", "status", "--porcelain", "--", target_app_path], cwd=path, text=True, capture_output=True, check=True)
-    automation_prefixes = (".codex/", ".bugfix-automation-bin/")
+    automation_prefixes = (".codex/", ".claude/", ".bugfix-automation-bin/")
     files: list[str] = []
     for line in result.stdout.splitlines():
         raw_path = line[3:]
@@ -112,7 +144,7 @@ def out_of_scope_paths(paths: list[str], target_app_path: str) -> list[str]:
     if target_app_path.strip().strip("/") in ("", "."):
         return []
     allowed_prefix = target_app_path.rstrip("/") + "/"
-    allowed_automation_paths = (".codex/", ".bugfix-automation-bin/")
+    allowed_automation_paths = (".codex/", ".claude/", ".bugfix-automation-bin/")
     return [
         path
         for path in paths
@@ -160,6 +192,8 @@ def _append_worktree_exclude_entries(exclude_file: Path) -> None:
         entries += ".bugfix-automation-bin\n"
     if ".codex" not in existing:
         entries += ".codex\n"
+    if ".claude" not in existing:
+        entries += ".claude\n"
     for pattern in (
         "node_modules",
         "node_modules/",

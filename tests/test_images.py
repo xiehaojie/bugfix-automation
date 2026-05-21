@@ -5,7 +5,7 @@ from pathlib import Path
 
 from bugfix_automation.filtering import filter_bugs
 from bugfix_automation.images import export_bug_images, image_ids_from_row, image_map
-from bugfix_automation.runner import codex_command
+from bugfix_automation.runner import ai_cli_command, codex_command
 
 
 def write_image_xlsx(path: Path) -> None:
@@ -70,6 +70,13 @@ class ImagesTest(unittest.TestCase):
         self.assertIn("/tmp/one.png", command)
         self.assertIn("/tmp/two.jpg", command)
         self.assertEqual(command[-1], "-")
+
+    def test_claude_command_does_not_use_codex_image_arguments(self) -> None:
+        command = ai_cli_command("/usr/local/bin/claude", "/tmp/worktree", "prompt", [Path("/tmp/one.png")])
+
+        self.assertNotIn("--image", command)
+        self.assertIn("--add-dir", command)
+        self.assertIn("/tmp", command)
 
 
 if __name__ == "__main__":
