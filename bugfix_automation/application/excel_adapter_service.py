@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 import json
 import shlex
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from bugfix_automation.config import CanonicalFieldMapping, Config, ExcelProfile, FilterRule, repo_root_path
 from bugfix_automation.excel_reader import read_sheet
@@ -12,6 +15,8 @@ from bugfix_automation.storage.settings import set_setting
 
 ALLOWED_FILTER_OPS = {"equals", "not_equals", "in", "any_in", "all_in", "not_in", "non_empty", "empty"}
 PROMPT_TEMPLATE_PATH = repo_root_path() / "prompts" / "excel_adapter.md"
+_ANALYSIS_LOCK = asyncio.Lock()
+_ACTIVE_ANALYSIS: dict[str, str] = {}
 
 
 def sanitize_adapter_suggestion(
@@ -69,16 +74,49 @@ def sanitize_adapter_suggestion(
     return cleaned
 
 
-async def analyze_excel_adapter(config: Config) -> dict[str, Any]:
+async def analyze_excel_adapter(config: Config, cli_tool: str = "") -> dict[str, Any]:
+    if _ANALYSIS_LOCK.locked():
+        log_path = _ACTIVE_ANALYSIS.get("log_path", "")
+        return {
+            "ok": False,
+            "error": "已有 AI 识别任务正在运行，请等待当前识别完成后再试。",
+            "log_path": log_path,
+        }
+
+    async with _ANALYSIS_LOCK:
+        try:
+            return await _analyze_excel_adapter_locked(config, cli_tool)
+        finally:
+            _ACTIVE_ANALYSIS.clear()
+
+
+async def _analyze_excel_adapter_locked(config: Config, cli_tool: str = "") -> dict[str, Any]:
+    log_dir = _analysis_log_dir(config)
+    log_path = log_dir / "analyze.log"
+    result_path = log_dir / "adapter.json"
+    _ACTIVE_ANALYSIS.clear()
+    _ACTIVE_ANALYSIS.update({"log_path": str(log_path), "result_path": str(result_path)})
+    selected_cli_tool = cli_tool.strip() or config.cli_tool
+    payload: dict[str, Any] = {}
+    prompt_text = ""
+    raw_stdout = ""
+    raw_stderr = ""
+    suggestion: dict[str, Any] | None = None
+    cleaned: dict[str, Any] | None = None
+    error = ""
+
     try:
         rows = read_sheet(config.excel_path, config.sheet_name)
         headers = _extract_headers(rows)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        error = str(exc)
+        _write_analysis_log(log_path, payload, prompt_text, raw_stdout, raw_stderr, suggestion, cleaned, error)
+        return {"ok": False, "error": error, "log_path": str(log_path), "result_path": str(result_path)}
 
     payload = {
         "excel_path": str(config.excel_path),
         "sheet_name": config.sheet_name,
+        "cli_tool": selected_cli_tool,
         "headers": headers,
         "sample_rows": rows[:3],
         "active_workspace": config.active_workspace,
@@ -108,15 +146,21 @@ async def analyze_excel_adapter(config: Config) -> dict[str, Any]:
     try:
         prompt_text = _load_prompt_template().format(payload_json=json.dumps(payload, ensure_ascii=False, indent=2))
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        error = str(exc)
+        _write_analysis_log(log_path, payload, prompt_text, raw_stdout, raw_stderr, suggestion, cleaned, error)
+        return {"ok": False, "error": error, "log_path": str(log_path), "result_path": str(result_path)}
 
     try:
-        suggestion = await _run_cli_json(config.cli_tool, prompt_text)
+        suggestion, raw_stdout, raw_stderr = await _run_cli_json(selected_cli_tool, prompt_text)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        error = str(exc)
+        _write_analysis_log(log_path, payload, prompt_text, raw_stdout, raw_stderr, suggestion, cleaned, error)
+        return {"ok": False, "error": error, "log_path": str(log_path), "result_path": str(result_path)}
 
     cleaned = sanitize_adapter_suggestion(suggestion, headers)
-    return {"ok": True, "adapter": cleaned}
+    result_path.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_analysis_log(log_path, payload, prompt_text, raw_stdout, raw_stderr, suggestion, cleaned, error)
+    return {"ok": True, "adapter": cleaned, "log_path": str(log_path), "result_path": str(result_path), "cli_tool": selected_cli_tool}
 
 
 def save_excel_adapter(config: Config, adapter: dict[str, Any] | None) -> dict[str, Any]:
@@ -210,7 +254,7 @@ def _load_prompt_template() -> str:
     return PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8").strip()
 
 
-async def _run_cli_json(cli_tool: str, prompt_text: str) -> dict[str, Any]:
+async def _run_cli_json(cli_tool: str, prompt_text: str) -> tuple[dict[str, Any], str, str]:
     tool = cli_tool.strip()
     if not tool:
         raise ValueError("cli_tool 不能为空")
@@ -237,6 +281,7 @@ async def _run_cli_json(cli_tool: str, prompt_text: str) -> dict[str, Any]:
         raise RuntimeError(err or f"CLI 退出码 {proc.returncode}")
 
     raw_stdout = stdout.decode(errors="replace").strip()
+    raw_stderr = stderr.decode(errors="replace").strip()
     if not raw_stdout:
         raise ValueError("CLI 没有返回 JSON")
     try:
@@ -245,7 +290,53 @@ async def _run_cli_json(cli_tool: str, prompt_text: str) -> dict[str, Any]:
         raise ValueError(f"CLI 返回的不是有效 JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         raise ValueError("CLI 返回的 JSON 不是对象")
-    return parsed
+    return parsed, raw_stdout, raw_stderr
+
+
+def _analysis_log_dir(config: Config) -> Path:
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_id = uuid4().hex[:8]
+    path = config.logs_root / "excel-adapter" / f"{stamp}-{run_id}"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _write_analysis_log(
+    log_path: Path,
+    payload: dict[str, Any],
+    prompt_text: str,
+    raw_stdout: str,
+    raw_stderr: str,
+    suggestion: dict[str, Any] | None,
+    cleaned: dict[str, Any] | None,
+    error: str,
+) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    sections = [
+        "# Excel Adapter Analyze",
+        f"created_at: {datetime.now().isoformat(timespec='seconds')}",
+        "",
+        "## payload.json",
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        "",
+        "## prompt",
+        prompt_text,
+        "",
+        "## raw_stdout",
+        raw_stdout,
+        "",
+        "## raw_stderr",
+        raw_stderr,
+        "",
+        "## parsed_suggestion.json",
+        json.dumps(suggestion or {}, ensure_ascii=False, indent=2),
+        "",
+        "## cleaned_adapter.json",
+        json.dumps(cleaned or {}, ensure_ascii=False, indent=2),
+    ]
+    if error:
+        sections.extend(["", "## error", error])
+    log_path.write_text("\n".join(sections).rstrip() + "\n", encoding="utf-8")
 
 
 def _extract_headers(rows: list[dict[str, str]]) -> list[str]:

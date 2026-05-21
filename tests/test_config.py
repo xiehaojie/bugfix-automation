@@ -259,6 +259,74 @@ prompt:
         self.assertEqual(config.prompt_fields, ("标题", "详情"))
         self.assertEqual(config.prompt_template, "db template")
 
+    def test_minimal_yaml_can_bootstrap_runtime_settings_from_sqlite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "app.sqlite3"
+            config_path.write_text(
+                f"""
+data_root: {root / "data"}
+storage_db_path: {db_path}
+cli_tool: codex
+approval_web_port: 8765
+approval_api_port: 8766
+""",
+                encoding="utf-8",
+            )
+            set_setting(db_path, "excel", {"excel_path": "/tmp/runtime.xlsx", "sheet_name": "RuntimeSheet"})
+            set_setting(
+                db_path,
+                "automation",
+                {
+                    "cli_tool": "claude",
+                    "max_concurrency": 3,
+                    "schedule": {"hour": 8, "minute": 45},
+                    "approval_web_port": 9001,
+                    "approval_api_port": 9002,
+                },
+            )
+            set_setting(db_path, "active_workspace", "admin")
+            set_setting(
+                db_path,
+                "workspaces",
+                [
+                    {
+                        "id": "admin",
+                        "name": "Admin",
+                        "target_repo": "/tmp/admin-repo",
+                        "repo_paths": ["/tmp/admin-repo"],
+                        "target_app_path": "apps/admin",
+                        "scope_paths": ["apps/admin"],
+                        "verify_commands": ["pnpm lint"],
+                        "prompt_context_paths": ["apps/admin/src"],
+                        "max_concurrency": 3,
+                        "scope": "frontend",
+                    }
+                ],
+            )
+            set_setting(db_path, "filters", [{"field": "负责人", "op": "equals", "value": "谢浩杰"}])
+            set_setting(db_path, "branch_summary_fields", ["标题"])
+            set_setting(db_path, "prompt", {"fields": ["标题", "详情"], "template": "runtime prompt", "context_paths": []})
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.excel_path, Path("/tmp/runtime.xlsx"))
+        self.assertEqual(config.sheet_name, "RuntimeSheet")
+        self.assertEqual(config.cli_tool, "claude")
+        self.assertEqual(config.max_concurrency, 3)
+        self.assertEqual(config.schedule_hour, 8)
+        self.assertEqual(config.schedule_minute, 45)
+        self.assertEqual(config.approval_web_port, 9001)
+        self.assertEqual(config.approval_api_port, 9002)
+        self.assertEqual(config.active_workspace, "admin")
+        self.assertEqual(config.target_repo, Path("/tmp/admin-repo"))
+        self.assertEqual(config.target_app_path, "apps/admin")
+        self.assertEqual(config.filters[0].value, "谢浩杰")
+        self.assertEqual(config.branch_summary_fields, ("标题",))
+        self.assertEqual(config.prompt_fields, ("标题", "详情"))
+        self.assertEqual(config.prompt_template, "runtime prompt")
+
     def test_update_filters_writes_sqlite_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "app.sqlite3"

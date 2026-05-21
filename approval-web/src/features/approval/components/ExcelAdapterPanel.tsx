@@ -38,7 +38,10 @@ export function ExcelAdapterPanel({ adapter, busyAction, onAnalyze, onSave, onCl
     return {
       fields: asArray(adapter.prompt?.fields),
       branchSummaryFields: asArray(adapter.branch_summary_fields),
-      filters: Array.isArray(adapter.filters) ? adapter.filters : []
+      filters: Array.isArray(adapter.filters) ? adapter.filters : [],
+      cliTool: adapter.cli_tool || "",
+      logPath: adapter.log_path || "",
+      resultPath: adapter.result_path || ""
     };
   }, [adapter]);
 
@@ -86,8 +89,14 @@ export function ExcelAdapterPanel({ adapter, busyAction, onAnalyze, onSave, onCl
           <pre className="promptContent">{[
             `传给 AI 的列：${summary.fields.join(", ") || "未识别"}`,
             `分支摘要字段：${summary.branchSummaryFields.join(", ") || "未识别"}`,
-            `筛选规则：${summary.filters.length ? `${summary.filters.length} 条` : "无"}`
-          ].join("\n")}</pre>
+            `筛选规则：${summary.filters.length ? `${summary.filters.length} 条` : "无"}`,
+            summary.cliTool ? `使用工具：${summary.cliTool}` : "",
+            summary.resultPath ? `结果文件：${summary.resultPath}` : "",
+            summary.logPath ? `识别日志：${summary.logPath}` : ""
+          ].filter(Boolean).join("\n")}</pre>
+          {summary.logPath ? (
+            <span className="configHint">日志包含传给 AI 的 payload、完整 prompt、AI 原始 stdout/stderr 和清洗后的 JSON</span>
+          ) : null}
         </div>
       ) : null}
 
@@ -102,7 +111,7 @@ export function ExcelAdapterPanel({ adapter, busyAction, onAnalyze, onSave, onCl
               rows={14}
               spellCheck={false}
             />
-            <span className="configHint">可直接修改 canonical_fields、prompt.template、prompt.fields、branch_summary_fields 和 filters 后保存</span>
+            <span className="configHint">这就是识别出来并准备保存的结果，可直接修改 canonical_fields、prompt.template、prompt.fields、branch_summary_fields 和 filters</span>
           </div>
           {error ? <div className="filterEditorError">{error}</div> : null}
           <div className="configSaveRow">

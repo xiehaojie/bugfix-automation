@@ -4,10 +4,11 @@ import argparse
 import json
 from datetime import datetime
 
-from bugfix_automation.config import load_config, update_config_yaml
+from bugfix_automation.config import load_config
 from bugfix_automation.filtering import make_branch_name
 from bugfix_automation.runner import list_bugs, run_once, run_one
 from bugfix_automation.scheduler import install_launchd_at
+from bugfix_automation.storage.settings import get_setting, set_setting
 from bugfix_automation.approval_server import serve, serve_api_only
 from bugfix_automation.application import integration_service
 
@@ -90,7 +91,10 @@ def main() -> int:
     if args.command == "install-launchd":
         hour = config.schedule_hour if args.hour is None else args.hour
         minute = config.schedule_minute if args.minute is None else args.minute
-        update_config_yaml({"schedule": {"hour": hour, "minute": minute}})
+        automation = get_setting(config.storage_db_path, "automation", {})
+        if not isinstance(automation, dict):
+            automation = {}
+        set_setting(config.storage_db_path, "automation", {**automation, "schedule": {"hour": hour, "minute": minute}})
         config = load_config()
         path = install_launchd_at(config, hour, minute)
         print(f"已安装定时任务: {path}")

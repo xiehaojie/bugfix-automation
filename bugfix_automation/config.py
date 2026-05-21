@@ -98,11 +98,10 @@ def load_config(config_path: Path | None = None) -> Config:
     yaml_path = config_path or default_config_path()
     yaml_values = _read_config_yaml(yaml_path)
     bootstrap_data_root = _path(os.environ.get("BUGFIX_DATA_ROOT", yaml_values.get("data_root", repo_root / "data")), repo_root)
-    bootstrap_db_path = _path(
-        os.environ.get("BUGFIX_STORAGE_DB_PATH", yaml_values.get("storage_db_path", bootstrap_data_root / "app.sqlite3")),
-        repo_root,
-    )
-    yaml_values = _merge_runtime_settings(yaml_values, _read_sqlite_settings(bootstrap_db_path))
+    bootstrap_db_raw = os.environ.get("BUGFIX_STORAGE_DB_PATH", yaml_values.get("storage_db_path"))
+    bootstrap_db_path = _path(bootstrap_db_raw or bootstrap_data_root / "app.sqlite3", repo_root)
+    if config_path is None or bootstrap_db_raw is not None:
+        yaml_values = _merge_runtime_settings(yaml_values, _read_sqlite_settings(bootstrap_db_path))
 
     def value(key: str, env_name: str, default: Any) -> Any:
         if env_name in os.environ:

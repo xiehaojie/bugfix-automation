@@ -40,6 +40,10 @@ class ExcelPathRequest(BaseModel):
     path: str = ""
 
 
+class ExcelAdapterAnalyzeRequest(BaseModel):
+    cli_tool: str = ""
+
+
 class ExcelAdapterSaveRequest(BaseModel):
     adapter: dict[str, Any] = {}
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from bugfix_automation.api.dependencies import get_config
-from bugfix_automation.api.schemas import ExcelAdapterSaveRequest, ExcelPathRequest
+from bugfix_automation.api.schemas import ExcelAdapterAnalyzeRequest, ExcelAdapterSaveRequest, ExcelPathRequest
 from bugfix_automation.application.excel_adapter_service import analyze_excel_adapter, save_excel_adapter
 from bugfix_automation.application.excel_service import get_excel_columns, select_excel_path, upload_excel_bytes
 from bugfix_automation.config import Config
@@ -27,8 +27,8 @@ def get_columns():
 
 
 @router.post("/api/excel/adapter/analyze")
-async def post_excel_adapter_analyze(config: Config = Depends(get_config)):
-    return await analyze_excel_adapter(config)
+async def post_excel_adapter_analyze(payload: ExcelAdapterAnalyzeRequest | None = None, config: Config = Depends(get_config)):
+    return await analyze_excel_adapter(config, cli_tool=payload.cli_tool if payload else "")
 
 
 @router.post("/api/excel/adapter/save")

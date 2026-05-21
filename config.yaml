@@ -1,72 +1,10 @@
-# 夜间 Bug 自动修复配置
-# 环境变量优先级更高，适合临时覆盖；平时直接改这个文件即可。
+# Bugfix automation bootstrap config.
+# Runtime settings live in SQLite app_settings. Keep this file small so uploads,
+# filters, prompts, workspaces, and schedules can be changed from the UI safely.
 
-excel_path: /Users/xiehaojie/code/bugfix-automation/uploads/谢浩杰测试bug-05201447-20260520-150326-866790.xlsx
-sheet_name: 在线问题清单
-assignee: 谢浩杰
-active_workspace: 亦城数智人前端
-max_concurrency: 2
+data_root: data
+storage_db_path: data/app.sqlite3
 
-target_repo: /Users/xiehaojie/code/monorepo
-target_app_path: apps/pc-web
-
-worktree_root: .target-worktrees
-runs_root: runs
-logs_root: logs
-
-launchd_label: local.bugfix-automation.nightly
 cli_tool: codex
-
 approval_web_port: 8765
 approval_api_port: 8766
-
-excel_processed_status_column: 对接人状态
-excel_processed_status_value: 已处理
-
-workspaces:
-  - id: 亦城数智人前端
-    name: 亦城数智人前端
-    target_repo: /Users/xiehaojie/code/monorepo
-    repo_paths:
-      - /Users/xiehaojie/code/monorepo
-    target_app_path: .
-    scope_paths: .
-    verify_commands: 
-    prompt_context_paths: 
-    max_concurrency: 2
-    scope: frontend
-  - id: 亦城数智人后端
-    name: 亦城数智人后端
-    target_repo: /Users/xiehaojie/ycszr
-    repo_paths:
-      - /Users/xiehaojie/ycszr
-    target_app_path: .
-    scope_paths: .
-    verify_commands: 
-    prompt_context_paths: 
-    max_concurrency: 2
-    scope: backend
-filters:
-  - field: 对接人
-    op: equals
-    value: 谢浩杰
-  - field: 来源系统
-    op: in
-    values: 小亦PC,小亦APP
-  - field: 对接人状态
-    op: not_equals
-    value: 已解决
-  - field: 提出人状态
-    op: not_equals
-    value: 已解决
-branch_summary_fields:
-  - 问题描述
-
-prompt:
-  fields: 序号,来源系统,一级分类,二级分类,优先级,提出人,提出日期,提出人状态,对接人,对接人状态,解决日期,问题描述,备注,备注2
-  template: 请按下面流程修复：1. 先阅读 Excel 选中字段、截图和工程上下文路径，确认问题是否属于当前前端工作区。2. 只修改允许的前端目录；不要修改后端、接口服务、数据库、部署配置。3. 如果判断必须依赖后端或数据改造，请停止并在最终说明中写清原因。4. 修复后运行当前工作区配置的检查命令；如果依赖缺失或命令失败，请保留失败原因。5. 不要 push，不要合并主分支，不要执行破坏性 git 命令。
-  context_paths:
-
-schedule:
-  hour: 22
-  minute: 0

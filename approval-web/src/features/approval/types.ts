@@ -79,6 +79,9 @@ export type ExcelAdapterSuggestion = {
   branch_summary_fields: string[];
   filters: FilterRule[];
   warnings: string[];
+  log_path?: string;
+  result_path?: string;
+  cli_tool?: string;
 };
 
 export type ConfigPayload = {

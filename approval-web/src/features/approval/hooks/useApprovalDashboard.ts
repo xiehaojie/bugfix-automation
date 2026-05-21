@@ -233,15 +233,18 @@ export function useApprovalDashboard() {
     setBusyAction("/api/excel/adapter/analyze");
     setToast("");
     try {
-      const data = await fetchJson<{ ok?: boolean; adapter?: ExcelAdapterSuggestion }>("/api/excel/adapter/analyze", {
+      const selectedCliTool = cliTool.trim() || "codex";
+      const data = await fetchJson<{ ok?: boolean; adapter?: ExcelAdapterSuggestion; log_path?: string; result_path?: string; cli_tool?: string }>("/api/excel/adapter/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cli_tool: selectedCliTool })
       });
       if (!data.adapter) {
         throw new Error("未返回 Excel 适配建议");
       }
-      setExcelAdapter(data.adapter);
-      setToast("已生成 Excel 适配建议");
+      const usedCliTool = data.cli_tool || selectedCliTool;
+      setExcelAdapter({ ...data.adapter, log_path: data.log_path, result_path: data.result_path, cli_tool: usedCliTool });
+      setToast(data.log_path ? `已用 ${usedCliTool} 生成 Excel 适配建议，日志：${data.log_path}` : `已用 ${usedCliTool} 生成 Excel 适配建议`);
     } catch (error) {
       setToast(error instanceof Error ? error.message : "分析失败");
     } finally {
