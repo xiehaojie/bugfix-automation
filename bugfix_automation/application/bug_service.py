@@ -104,7 +104,7 @@ def preview_prompt(config: Config, excel_row: int) -> dict[str, Any]:
     prompt = render_codex_prompt(
         bug,
         target_app_path=config.target_app_path,
-        prompt_fields=config.prompt_fields or None,
+        prompt_fields=config.prompt_fields,
         prompt_template=config.prompt_template,
         context_paths=config.prompt_context_paths or None,
         workspace_name=workspace.name if workspace else "",

@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from bugfix_automation.api.app import create_app
-from bugfix_automation.config import Config
+from bugfix_automation.config import Config, WorkspaceConfig
 from bugfix_automation.storage.db import connect
 from bugfix_automation.storage.repositories import create_ai_session, create_operation, finish_ai_session
 from bugfix_automation.storage.settings import get_setting
@@ -45,6 +45,40 @@ class FastApiApprovalTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"branch": "", "path": "", "content": ""})
+
+    def test_preview_prompt_honors_empty_prompt_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workbook = root / "bugs.xlsx"
+            write_minimal_xlsx(workbook)
+            config = replace(
+                self.make_config(root),
+                excel_path=workbook,
+                sheet_name="在线问题清单",
+                prompt_fields=(),
+                workspaces=(
+                    WorkspaceConfig(
+                        id="pc-web",
+                        name="PC Web",
+                        target_repo=root / "repo",
+                        target_app_path="apps/pc-web",
+                        scope_paths=("apps/pc-web",),
+                        verify_commands=(),
+                        prompt_context_paths=(),
+                        max_concurrency=2,
+                    ),
+                ),
+            )
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+
+            response = client.post("/api/bugs/preview-prompt", json={"excel_row": 2})
+
+        self.assertEqual(response.status_code, 200)
+        prompt = response.json()["prompt"]
+        selected_section = prompt.split("原始 Excel 行完整信息：", 1)[0]
+        self.assertIn("Excel 选中字段：\n- 无", selected_section)
+        self.assertNotIn("问题描述: 账号离线状态", selected_section)
+        self.assertIn("问题描述: 账号离线状态", prompt)
 
     def test_logs_stream_returns_snapshot_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
