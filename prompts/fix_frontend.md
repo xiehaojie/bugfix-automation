@@ -25,6 +25,9 @@ Excel 信息：
 Excel 选中字段：
 {selected_lines}
 
+原始 Excel 行完整信息：
+{raw_lines}
+
 随本次 Codex 调用传入的截图：
 {image_lines}
 

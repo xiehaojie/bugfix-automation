@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import re
 import unicodedata
 
-from bugfix_automation.config import FilterRule
+from bugfix_automation.config import CanonicalFieldMapping, FilterRule
 
 
 ALLOWED_SOURCE_SYSTEMS = {"小亦PC", "小亦APP"}
@@ -38,6 +38,7 @@ def filter_bugs(
     assignee: str,
     excluded_assignee_statuses: set[str] | None = None,
     rules: tuple[FilterRule, ...] | None = None,
+    mapping: CanonicalFieldMapping | None = None,
 ) -> list[BugRecord]:
     closed_statuses = {SOLVED_STATUS}
     if excluded_assignee_statuses:
@@ -57,27 +58,30 @@ def filter_bugs(
                 continue
             if _clean(row.get("提出人状态")) not in ALLOWED_REQUESTER_STATUSES:
                 continue
-        bugs.append(
-            BugRecord(
-                excel_row=int(row.get("_excel_row", "0") or "0"),
-                issue_id=_clean(row.get("序号")) or str(row.get("_excel_row", "")),
-                requester_status=_clean(row.get("提出人状态")),
-                source_system=_clean(row.get("来源系统")),
-                priority=_clean(row.get("优先级")),
-                primary_category=_clean(row.get("一级分类")),
-                secondary_category=_clean(row.get("二级分类")),
-                requester=_clean(row.get("提出人")),
-                request_date=_format_excel_date(row.get("提出日期")),
-                assignee=_clean(row.get("对接人")),
-                assignee_status=_clean(row.get("对接人状态")),
-                resolved_date=_format_excel_date(row.get("解决日期")),
-                description=_clean(row.get("问题描述")),
-                remark=_clean(row.get("备注")),
-                remark2=_clean(row.get("备注2")),
-                raw=row,
-            )
-        )
+        bugs.append(bug_record_from_row(row, mapping))
     return bugs
+
+
+def bug_record_from_row(row: dict[str, str], mapping: CanonicalFieldMapping | None = None) -> BugRecord:
+    fields = mapping or CanonicalFieldMapping()
+    return BugRecord(
+        excel_row=int(row.get("_excel_row", "0") or "0"),
+        issue_id=_clean(row.get(fields.issue_id)) or str(row.get("_excel_row", "")),
+        requester_status=_clean(row.get(fields.requester_status)),
+        source_system=_clean(row.get(fields.source_system)),
+        priority=_clean(row.get(fields.priority)),
+        primary_category=_clean(row.get(fields.primary_category)),
+        secondary_category=_clean(row.get(fields.secondary_category)),
+        requester=_clean(row.get(fields.requester)),
+        request_date=_format_excel_date(row.get(fields.request_date)),
+        assignee=_clean(row.get(fields.assignee)),
+        assignee_status=_clean(row.get(fields.assignee_status)),
+        resolved_date=_format_excel_date(row.get(fields.resolved_date)),
+        description=_clean(row.get(fields.description)),
+        remark=_clean(row.get(fields.remark)),
+        remark2=_clean(row.get(fields.remark2)),
+        raw=row,
+    )
 
 
 def _matches_rules(row: dict[str, str], rules: tuple[FilterRule, ...]) -> bool:

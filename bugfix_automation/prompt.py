@@ -27,6 +27,11 @@ def render_codex_prompt(
 ) -> str:
     selected_fields = prompt_fields or tuple(key for key in bug.raw if key != "_excel_row")
     selected_lines = "\n".join(f"- {field}: {_field_value(bug, field)}" for field in selected_fields)
+    raw_lines = "\n".join(
+        f"- {field}: {value}"
+        for field, value in bug.raw.items()
+        if field != "_excel_row" and str(value).strip()
+    ) or "- 无"
     context_lines = "\n".join(f"- {path}" for path in context_paths or () if path.strip()) or "- 无"
     image_lines = "\n".join(f"- {path}" for path in image_paths or []) or "- 无"
 
@@ -41,6 +46,7 @@ def render_codex_prompt(
         workspace_name=workspace_name or target_app_path,
         prompt_template=prompt_template or "无",
         selected_lines=selected_lines,
+        raw_lines=raw_lines,
         image_lines=image_lines,
         context_lines=context_lines,
     )

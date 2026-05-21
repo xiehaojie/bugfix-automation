@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bugfix_automation.config import FilterRule
+from bugfix_automation.config import CanonicalFieldMapping, FilterRule
 from bugfix_automation.filtering import filter_bugs, make_branch_name
 from bugfix_automation.prompt import render_codex_prompt
 from bugfix_automation.reporter import conflict_index, write_reports
@@ -155,9 +155,10 @@ class FilteringPromptReportTest(unittest.TestCase):
         ], assignee="谢浩杰")[0]
 
         prompt = render_codex_prompt(bug, target_app_path="apps/pc-web", prompt_fields=("问题描述",))
+        selected_section = prompt.split("原始 Excel 行完整信息：", 1)[0]
 
-        self.assertIn("问题描述: 账号离线状态", prompt)
-        self.assertNotIn("备注: 页面反馈不明显", prompt)
+        self.assertIn("问题描述: 账号离线状态", selected_section)
+        self.assertNotIn("备注: 页面反馈不明显", selected_section)
 
     def test_prompt_uses_formatted_known_field_values(self) -> None:
         bug = filter_bugs([
@@ -174,9 +175,56 @@ class FilteringPromptReportTest(unittest.TestCase):
         ], assignee="谢浩杰")[0]
 
         prompt = render_codex_prompt(bug, target_app_path="apps/pc-web", prompt_fields=("提出日期",))
+        selected_section = prompt.split("原始 Excel 行完整信息：", 1)[0]
 
-        self.assertIn("提出日期: 2026/4/21", prompt)
-        self.assertNotIn("提出日期: 46133", prompt)
+        self.assertIn("提出日期: 2026/4/21", selected_section)
+        self.assertIn("提出日期: 46133", prompt)
+
+    def test_filter_bugs_uses_custom_canonical_mapping(self) -> None:
+        rows = [{
+            "_excel_row": "9",
+            "编号": "BUG-9",
+            "标题": "上传按钮无反馈",
+            "详情": "点击上传后没有进度",
+            "负责人": "谢浩杰",
+            "状态": "处理中",
+        }]
+
+        bugs = filter_bugs(
+            rows,
+            assignee="",
+            rules=(FilterRule("负责人", "equals", "谢浩杰", ("谢浩杰",)),),
+            mapping=CanonicalFieldMapping(
+                issue_id="编号",
+                description="标题",
+                remark="详情",
+                assignee="负责人",
+                assignee_status="状态",
+            ),
+        )
+
+        self.assertEqual(bugs[0].issue_id, "BUG-9")
+        self.assertEqual(bugs[0].description, "上传按钮无反馈")
+        self.assertEqual(bugs[0].remark, "点击上传后没有进度")
+        self.assertEqual(bugs[0].assignee, "谢浩杰")
+
+    def test_prompt_includes_raw_excel_row_section(self) -> None:
+        bug = filter_bugs([
+            {
+                "_excel_row": "2",
+                "序号": "87",
+                "提出人状态": "处理中",
+                "来源系统": "小亦PC",
+                "对接人": "谢浩杰",
+                "问题描述": "账号离线状态",
+                "自定义字段": "只有原始行里有",
+            }
+        ], assignee="谢浩杰")[0]
+
+        prompt = render_codex_prompt(bug, target_app_path="apps/pc-web", prompt_fields=("问题描述",))
+
+        self.assertIn("原始 Excel 行完整信息", prompt)
+        self.assertIn("自定义字段: 只有原始行里有", prompt)
 
     def test_filter_bugs_converts_excel_serial_dates_for_report_fields(self) -> None:
         bug = filter_bugs([

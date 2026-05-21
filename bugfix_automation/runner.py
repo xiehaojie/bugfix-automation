@@ -48,7 +48,13 @@ WORKTREE_LOCK = threading.Lock()
 
 def list_bugs(config: Config) -> list[BugRecord]:
     rows = read_sheet(config.excel_path, config.sheet_name)
-    return filter_bugs(rows, config.assignee, {config.excel_processed_status_value}, config.filters)
+    return filter_bugs(
+        rows,
+        config.assignee,
+        {config.excel_processed_status_value},
+        config.filters,
+        mapping=config.excel_profile.canonical_fields,
+    )
 
 
 def run_once(config: Config, dry_run: bool = False) -> tuple[Path, Path, Path]:
