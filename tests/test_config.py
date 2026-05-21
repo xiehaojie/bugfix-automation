@@ -181,7 +181,22 @@ prompt:
                 db_path,
                 "excel_profile",
                 {
-                    "canonical_fields": {"issue_id": "编号", "description": "标题", "assignee": "负责人"},
+                    "canonical_fields": {
+                        "issue_id": "编号",
+                        "source_system": "系统",
+                        "priority": "等级",
+                        "primary_category": "一级",
+                        "secondary_category": "二级",
+                        "requester": "提出者",
+                        "request_date": "日期",
+                        "requester_status": "提出状态",
+                        "assignee": "负责人",
+                        "assignee_status": "处理状态",
+                        "resolved_date": "完成日期",
+                        "description": "标题",
+                        "remark": "详情",
+                        "remark2": "补充",
+                    },
                     "prompt": {
                         "fields": ["标题", "详情"],
                         "template": "adapter template",
@@ -193,10 +208,50 @@ prompt:
             config = load_config(config_path)
 
         self.assertEqual(config.excel_profile.canonical_fields.issue_id, "编号")
+        self.assertEqual(config.excel_profile.canonical_fields.source_system, "系统")
+        self.assertEqual(config.excel_profile.canonical_fields.priority, "等级")
+        self.assertEqual(config.excel_profile.canonical_fields.primary_category, "一级")
+        self.assertEqual(config.excel_profile.canonical_fields.secondary_category, "二级")
+        self.assertEqual(config.excel_profile.canonical_fields.requester, "提出者")
+        self.assertEqual(config.excel_profile.canonical_fields.request_date, "日期")
+        self.assertEqual(config.excel_profile.canonical_fields.requester_status, "提出状态")
+        self.assertEqual(config.excel_profile.canonical_fields.assignee, "负责人")
+        self.assertEqual(config.excel_profile.canonical_fields.assignee_status, "处理状态")
+        self.assertEqual(config.excel_profile.canonical_fields.resolved_date, "完成日期")
         self.assertEqual(config.excel_profile.canonical_fields.description, "标题")
+        self.assertEqual(config.excel_profile.canonical_fields.remark, "详情")
+        self.assertEqual(config.excel_profile.canonical_fields.remark2, "补充")
         self.assertEqual(config.prompt_fields, ("标题", "详情"))
         self.assertEqual(config.prompt_template, "adapter template")
         self.assertEqual(config.branch_summary_fields, ("标题",))
+
+    def test_load_config_uses_yaml_when_sqlite_settings_cannot_be_read(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "app.sqlite3"
+            db_path.parent.mkdir(parents=True)
+            db_path.write_text("not a sqlite database", encoding="utf-8")
+            config_path.write_text(
+                f"""
+storage_db_path: {db_path}
+excel_path: /tmp/from-yaml.xlsx
+sheet_name: SheetFromYaml
+max_concurrency: 3
+prompt:
+  fields: 问题描述
+  template: yaml template
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.excel_path, Path("/tmp/from-yaml.xlsx"))
+        self.assertEqual(config.sheet_name, "SheetFromYaml")
+        self.assertEqual(config.max_concurrency, 3)
+        self.assertEqual(config.prompt_fields, ("问题描述",))
+        self.assertEqual(config.prompt_template, "yaml template")
 
 
 if __name__ == "__main__":

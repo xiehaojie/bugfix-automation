@@ -32,18 +32,18 @@ class WorkspaceConfig:
 class CanonicalFieldMapping:
     issue_id: str = "序号"
     source_system: str = "来源系统"
+    priority: str = "优先级"
     primary_category: str = "一级分类"
     secondary_category: str = "二级分类"
-    priority: str = "优先级"
-    reporter: str = "提出人"
-    reported_at: str = "提出日期"
-    reporter_status: str = "提出人状态"
+    requester: str = "提出人"
+    request_date: str = "提出日期"
+    requester_status: str = "提出人状态"
     assignee: str = "对接人"
     assignee_status: str = "对接人状态"
-    resolved_at: str = "解决日期"
+    resolved_date: str = "解决日期"
     description: str = "问题描述"
-    notes: str = "备注"
-    notes2: str = "备注2"
+    remark: str = "备注"
+    remark2: str = "备注2"
 
 
 @dataclass(frozen=True)
@@ -165,7 +165,10 @@ def default_config_path() -> Path:
 def _read_sqlite_settings(db_path: Path) -> dict[str, Any]:
     from bugfix_automation.storage.settings import get_settings
 
-    return get_settings(db_path)
+    try:
+        return get_settings(db_path)
+    except Exception:
+        return {}
 
 
 def _merge_runtime_settings(yaml_values: dict[str, Any], sqlite_settings: dict[str, Any]) -> dict[str, Any]:
