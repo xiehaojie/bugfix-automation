@@ -53,9 +53,11 @@ class ExcelProfile:
     canonical_fields: CanonicalFieldMapping = CanonicalFieldMapping()
     prompt_fields: tuple[str, ...] = ()
     prompt_template: str = ""
+    prompt_context_paths: tuple[str, ...] = ()
     branch_summary_fields: tuple[str, ...] = ()
     prompt_fields_provided: bool = field(default=False, repr=False)
     prompt_template_provided: bool = field(default=False, repr=False)
+    prompt_context_paths_provided: bool = field(default=False, repr=False)
     branch_summary_fields_provided: bool = field(default=False, repr=False)
 
 
@@ -128,6 +130,11 @@ def load_config(config_path: Path | None = None) -> Config:
         if excel_profile.branch_summary_fields_provided
         else _string_tuple(yaml_values.get("branch_summary_fields"), ("问题描述",))
     )
+    prompt_context_paths = (
+        excel_profile.prompt_context_paths
+        if excel_profile.prompt_context_paths_provided
+        else _string_tuple(prompt.get("context_paths"), ())
+    )
     global_max_concurrency = int(value("max_concurrency", "BUGFIX_MAX_CONCURRENCY", active.max_concurrency if active else 2))
     return Config(
         excel_path=_path(value("excel_path", "BUGFIX_EXCEL_PATH", "/Users/xiehaojie/Desktop/亦城数智人在线清单.xlsx"), repo_root),
@@ -162,7 +169,7 @@ def load_config(config_path: Path | None = None) -> Config:
             if excel_profile.prompt_template_provided
             else str(prompt.get("template", DEFAULT_PROMPT_TEMPLATE))
         ),
-        prompt_context_paths=(*_string_tuple(prompt.get("context_paths"), ()), *(active.prompt_context_paths if active else ())),
+        prompt_context_paths=(*prompt_context_paths, *(active.prompt_context_paths if active else ())),
         max_concurrency=max(1, min(int(os.environ.get("BUGFIX_MAX_CONCURRENCY", global_max_concurrency)), 8)),
         validation_target_branches=_string_tuple(value("validation_target_branches", "BUGFIX_VALIDATION_TARGET_BRANCHES", ("main", "master", "develop"))),
         excel_profile=excel_profile,
@@ -283,9 +290,11 @@ def _excel_profile(value: Any) -> ExcelProfile:
         canonical_fields=CanonicalFieldMapping(**canonical_kwargs),
         prompt_fields=_string_tuple(prompt.get("fields"), ()),
         prompt_template=prompt_template,
+        prompt_context_paths=_string_tuple(prompt.get("context_paths"), ()),
         branch_summary_fields=_string_tuple(prompt.get("branch_summary_fields"), ()),
         prompt_fields_provided="fields" in prompt,
         prompt_template_provided="template" in prompt,
+        prompt_context_paths_provided="context_paths" in prompt,
         branch_summary_fields_provided="branch_summary_fields" in prompt,
     )
 

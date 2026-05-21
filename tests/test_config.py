@@ -358,6 +358,48 @@ prompt:
         self.assertEqual(config.prompt_template, "")
         self.assertEqual(config.branch_summary_fields, ())
 
+    def test_load_config_prefers_empty_sqlite_excel_profile_context_paths_over_top_level_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "app.sqlite3"
+            config_path.write_text(
+                f"""
+storage_db_path: {db_path}
+prompt:
+  context_paths:
+    - yaml-top-level
+""",
+                encoding="utf-8",
+            )
+            set_setting(db_path, "prompt", {"context_paths": ["sqlite-top-level"]})
+            set_setting(db_path, "excel_profile", {"prompt": {"context_paths": []}})
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.prompt_context_paths, ())
+
+    def test_load_config_prefers_sqlite_excel_profile_context_paths_over_top_level_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "app.sqlite3"
+            config_path.write_text(
+                f"""
+storage_db_path: {db_path}
+prompt:
+  context_paths:
+    - yaml-top-level
+""",
+                encoding="utf-8",
+            )
+            set_setting(db_path, "prompt", {"context_paths": ["sqlite-top-level"]})
+            set_setting(db_path, "excel_profile", {"prompt": {"context_paths": ["profile-path"]}})
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.prompt_context_paths, ("profile-path",))
+
     def test_load_config_uses_yaml_when_sqlite_settings_cannot_be_read(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
