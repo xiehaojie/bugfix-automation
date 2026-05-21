@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 import subprocess
 
+from bugfix_automation.runner import runtime_path_prefix
 from bugfix_automation.worktree import create_no_push_git_wrapper, rename_current_branch, worktree_path_for_branch
 
 
@@ -21,6 +22,21 @@ class WorktreeTest(unittest.TestCase):
 
         self.assertIn("自动修复流程已禁止 git push", content)
         self.assertIn('if [ "$1" = "push" ]', content)
+
+    def test_runtime_path_prefix_reuses_target_repo_node_bins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            wrapper = Path(tmp) / "wrapper"
+            (repo / "node_modules" / ".bin").mkdir(parents=True)
+            (repo / "apps" / "pc-web" / "node_modules" / ".bin").mkdir(parents=True)
+            wrapper.mkdir()
+
+            prefix = runtime_path_prefix(repo, wrapper)
+
+        parts = prefix.split(":")
+        self.assertEqual(parts[0], str(wrapper))
+        self.assertIn(str(repo / "node_modules" / ".bin"), parts)
+        self.assertIn(str(repo / "apps" / "pc-web" / "node_modules" / ".bin"), parts)
 
     def test_rename_current_branch_renames_checked_out_fix_branch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

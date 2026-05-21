@@ -9,7 +9,7 @@ from typing import Any
 from bugfix_automation.config import Config
 from bugfix_automation.excel_writer import update_cell_by_header
 from bugfix_automation.runner import list_bugs
-from bugfix_automation.runner import assert_scope_clean, codex_command, codex_log_path
+from bugfix_automation.runner import assert_scope_clean, codex_command, codex_log_path, runtime_path_prefix
 from bugfix_automation.task_state import is_task_active, set_task_state, task_state
 from bugfix_automation.worktree import changed_paths, commit_all, create_no_push_git_wrapper, tracked_changed_files
 
@@ -167,9 +167,10 @@ def rework_fix(config: Config, branch: str, note: str = "", file_paths: list[str
     normalized_images = [Path(path).expanduser() for path in image_paths or [] if path.strip()]
     prompt = _rework_prompt(config, branch, note, file_paths or [], normalized_images)
     git_wrapper_dir = create_no_push_git_wrapper(fix.path)
+    path_prefix = runtime_path_prefix(config.target_repo, git_wrapper_dir)
     set_task_state(config, branch, "reworking", detail="正在根据补充信息重新修改。", phase="codex", image_paths=normalized_images)
     try:
-        _run(codex_command(config.cli_tool, str(fix.path), prompt, normalized_images), cwd=fix.path, path_prefix=git_wrapper_dir, stdin_text=prompt, log_path=codex_log_path(config, branch))
+        _run(codex_command(config.cli_tool, str(fix.path), prompt, normalized_images), cwd=fix.path, path_prefix=path_prefix, stdin_text=prompt, log_path=codex_log_path(config, branch))
         assert_scope_clean(changed_paths(fix.path), config.target_app_path)
         _git(fix.path, ["diff", "--check", "--", config.target_app_path])
         set_task_state(config, branch, "pending-approval", detail="重新修改完成，等待审批。", phase="done", image_paths=normalized_images)
@@ -190,7 +191,7 @@ def _git(cwd: Path, args: list[str]) -> str:
     return result.stdout
 
 
-def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_text: str | None = None, log_path: Path | None = None) -> None:
+def _run(command: list[str], cwd: Path, path_prefix: str | Path | None = None, stdin_text: str | None = None, log_path: Path | None = None) -> None:
     import os
 
     env = os.environ.copy()

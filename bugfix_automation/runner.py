@@ -170,6 +170,7 @@ def process_bug(
         write_worktree_exclude(worktree_path)
         install_project_agents(worktree_path, Path(__file__).resolve().parents[1])
         git_wrapper_dir = create_no_push_git_wrapper(worktree_path)
+        path_prefix = runtime_path_prefix(config.target_repo, git_wrapper_dir)
         workspace = active_workspace_config(config)
         prompt = render_codex_prompt(
             bug,
@@ -184,7 +185,7 @@ def process_bug(
         set_task_state(config, branch, "running", bug, detail="AI 正在分析并尝试修复。", phase="codex", image_paths=image_paths, operation_id=operation_id)
         ai_session = _start_ai_session(config, operation_id, config.cli_tool, worktree_path, prompt, log_path)
         try:
-            _run(ai_cli_command(config.cli_tool, str(worktree_path), prompt, image_paths), cwd=worktree_path, path_prefix=git_wrapper_dir, stdin_text=prompt, log_path=log_path)
+            _run(ai_cli_command(config.cli_tool, str(worktree_path), prompt, image_paths), cwd=worktree_path, path_prefix=path_prefix, stdin_text=prompt, log_path=log_path)
         except Exception:
             _finish_ai_session(config, ai_session, log_path, branch, bug, status="failed")
             raise
@@ -328,13 +329,42 @@ def ai_cli_command(cli_tool: str, worktree_path: str, prompt: str, image_paths: 
 codex_command = ai_cli_command
 
 
+def runtime_path_prefix(target_repo: Path, git_wrapper_dir: Path) -> str:
+    paths = [str(git_wrapper_dir)]
+    for candidate in _node_bin_paths(target_repo):
+        paths.append(str(candidate))
+    return os.pathsep.join(paths)
+
+
+def _node_bin_paths(target_repo: Path) -> list[Path]:
+    candidates = [target_repo / "node_modules" / ".bin"]
+    for category in ("apps", "packages", "libs"):
+        category_dir = target_repo / category
+        if not category_dir.is_dir():
+            continue
+        for package_dir in category_dir.iterdir():
+            if package_dir.is_dir():
+                candidates.append(package_dir / "node_modules" / ".bin")
+    seen: set[Path] = set()
+    paths: list[Path] = []
+    for candidate in candidates:
+        if not candidate.is_dir():
+            continue
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        paths.append(candidate)
+    return paths
+
+
 def assert_scope_clean(paths: list[str], target_app_path: str) -> None:
     unsafe_paths = out_of_scope_paths(paths, target_app_path)
     if unsafe_paths:
         raise RuntimeError(f"检测到超出前端范围的改动：{', '.join(unsafe_paths)}")
 
 
-def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_text: str | None = None, log_path: Path | None = None) -> None:
+def _run(command: list[str], cwd: Path, path_prefix: str | Path | None = None, stdin_text: str | None = None, log_path: Path | None = None) -> None:
     env = os.environ.copy()
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env.get('PATH', '')}"
