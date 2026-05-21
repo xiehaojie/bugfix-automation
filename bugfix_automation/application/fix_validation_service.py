@@ -13,6 +13,7 @@ from typing import Any, Iterator
 
 from bugfix_automation.config import Config, active_workspace_config
 from bugfix_automation.storage.db import connect, ensure_schema
+from bugfix_automation.storage.repositories import create_operation
 from bugfix_automation.worktree import branch_worktree_path, worktree_path_for_branch, write_worktree_exclude
 
 VALIDATION_RUNS_DIR = "fix-validations"
@@ -64,6 +65,7 @@ def verify(config: Config, branch: str, *, commands_override: list[list[str]] | 
             data["status"] = "conflict"
             data["error"] = str(exc)
             _save_validation(config, branch, data)
+            _record_validation_op(config, "fix-preview", "conflict", branch, data)
             return data
 
         data.update(applied)
@@ -71,6 +73,7 @@ def verify(config: Config, branch: str, *, commands_override: list[list[str]] | 
         data["verify"] = {"status": "ai-verified", "commands": []}
         data["status"] = "ready-to-commit"
         _save_validation(config, branch, data)
+        _record_validation_op(config, "fix-preview", "ready-to-commit", branch, data)
         return data
 
 
@@ -187,6 +190,7 @@ def revert_validation(config: Config, branch: str) -> dict[str, Any]:
 
         data["status"] = "reverted"
         _save_validation(config, branch, data)
+        _record_validation_op(config, "fix-revert", "reverted", branch, data)
         return data
 
 
@@ -240,6 +244,7 @@ def undo_commit(config: Config, branch: str) -> dict[str, Any]:
         data.pop("final_commit", None)
         data.pop("final_commit_location", None)
         _save_validation(config, branch, data)
+        _record_validation_op(config, "fix-undo-commit", "ready-to-commit", branch, data)
         return data
 
 
@@ -258,6 +263,7 @@ def remove_preview(config: Config, branch: str) -> dict[str, Any]:
             _remove_preview_artifacts(config, target_repo, Path(data["integration_worktree"]), data["integration_branch"])
         data["status"] = "preview-removed"
         _save_validation(config, branch, data)
+        _record_validation_op(config, "fix-remove-preview", "preview-removed", branch, data)
         return data
 
 
@@ -308,6 +314,7 @@ def cleanup_source(config: Config, branch: str) -> dict[str, Any]:
         data["status"] = "cleaned"
         data["cleaned_branch"] = branch
         _save_validation(config, branch, data)
+        _record_validation_op(config, "fix-cleanup-source", "cleaned", branch, data)
         return data
 
 
@@ -541,17 +548,60 @@ def _record_commit_op(config: Config, branch: str, commit_sha: str, location: st
                     branch,
                     data.get("issue_id", ""),
                     json.dumps({
+                        "title": "已提交此修复",
                         "commit_sha": commit_sha,
                         "location": location,
                         "target_branch": data.get("target_branch", ""),
                         "run_id": data.get("run_id", ""),
                         "integration_branch": data.get("integration_branch", ""),
+                        "changed_files": data.get("changed_files", []),
                     }),
                 ),
             )
             db.commit()
     except Exception:
         pass  # 入库失败不阻断主流程
+
+
+def _record_validation_op(config: Config, kind: str, status: str, branch: str, data: dict[str, Any]) -> None:
+    try:
+        create_operation(
+            config.storage_db_path,
+            kind=kind,
+            workspace_id=config.active_workspace or "",
+            status=status,
+            branch=branch,
+            issue_id=str(data.get("issue_id") or ""),
+            summary=json.dumps(
+                {
+                    "title": _validation_op_title(kind, status),
+                    "status": data.get("status", status),
+                    "changed_files": data.get("changed_files", []),
+                    "target_branch": data.get("target_branch", ""),
+                    "integration_branch": data.get("integration_branch", ""),
+                    "integration_worktree": data.get("integration_worktree", ""),
+                    "final_commit": data.get("final_commit", ""),
+                    "final_commit_location": data.get("final_commit_location", ""),
+                    "revert_commit": data.get("revert_commit", ""),
+                    "error": data.get("error", ""),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
+    except Exception:
+        pass
+
+
+def _validation_op_title(kind: str, status: str) -> str:
+    titles = {
+        "fix-preview": "已生成提交预演" if status != "conflict" else "提交预演发生冲突",
+        "fix-revert": "已撤回提交",
+        "fix-undo-commit": "已撤销上次提交",
+        "fix-remove-preview": "已移除提交预演",
+        "fix-cleanup-source": "已清理来源分支",
+    }
+    return titles.get(kind, kind)
 
 
 def _remove_preview_artifacts(config: Config, target_repo: Path, worktree_path: Path, integration_branch: str) -> None:

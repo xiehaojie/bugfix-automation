@@ -12,6 +12,7 @@ import {
   FolderDot,
   FolderSync,
   GitMerge,
+  History,
   Loader2,
   PackageCheck,
   Pencil,
@@ -34,6 +35,7 @@ import { BugTable } from "../src/features/approval/components/BugTable";
 import { DiffView } from "../src/features/approval/components/DiffView";
 import { FilterRulesEditor } from "../src/features/approval/components/FilterRulesEditor";
 import { FixValidationCard } from "../src/features/approval/components/FixValidationCard";
+import { OperationHistoryPanel } from "../src/features/approval/components/OperationHistoryPanel";
 import { PromptPreview } from "../src/features/approval/components/PromptPreview";
 import { WorkspaceManager } from "../src/features/approval/components/WorkspaceManager";
 import { useApprovalDashboard } from "../src/features/approval/hooks/useApprovalDashboard";
@@ -99,7 +101,7 @@ export default function ApprovalPage() {
   const [previewBug, setPreviewBug] = useState<BugItem | null>(null);
   const [configExpanded, setConfigExpanded] = useState(false);
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false);
-  const [mainTab, setMainTab] = useState<"pending" | "running" | "done" | "integration">("pending");
+  const [mainTab, setMainTab] = useState<"pending" | "running" | "done" | "integration" | "history">("pending");
   const [cliTestResult, setCliTestResult] = useState<{ ok: boolean; version?: string; error?: string } | null>(null);
   const [cliTesting, setCliTesting] = useState(false);
   const [scrollToFile, setScrollToFile] = useState<string | null>(null);
@@ -368,12 +370,17 @@ export default function ApprovalPage() {
                 <GitMerge size={14} />
                 集成
               </button>
+              <button className={`mainTab ${mainTab === "history" ? "active" : ""}`} onClick={() => setMainTab("history")}>
+                <History size={14} />
+                记录
+              </button>
             </nav>
             <div className="queuePanelSummary">
               {mainTab === "pending" ? `等待处理 ${bugs.length} 个 Excel 命中` : null}
               {mainTab === "running" ? `正在执行 ${runningItems.length} 个修复任务` : null}
               {mainTab === "done" ? `已完成 ${doneItems.length} 个 worktree` : null}
               {mainTab === "integration" ? "进入集成预演页，选择真实 fix/* 分支和目标分支" : null}
+              {mainTab === "history" ? "查看修复、提交、拒绝、重改和 AI 对话记录" : null}
             </div>
           </div>
           <div className="mainTabContent">
@@ -401,10 +408,19 @@ export default function ApprovalPage() {
                 <Link className="button primary" href="/integration">打开集成预演</Link>
               </div>
             )}
+            {mainTab === "history" && (
+              <OperationHistoryPanel
+                onOpenBranch={(branch) => {
+                  setSelectedBranch(branch);
+                  setMainTab("done");
+                }}
+              />
+            )}
           </div>
         </section>
 
         {/* ── 审批区 ── */}
+        {mainTab !== "history" ? (
         <section className="reviewGrid" style={{ gridTemplateColumns: `minmax(0, 1fr) 10px ${inspectorWidth}px` }}>
           <div className="reviewMain">
             {selected ? (
@@ -459,6 +475,7 @@ export default function ApprovalPage() {
             </Panel>
           </aside>
         </section>
+        ) : null}
       </section>
 
       {/* ── 提示词预览弹窗 ── */}

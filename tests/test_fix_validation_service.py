@@ -34,6 +34,8 @@ def config(tmp_path: Path, tmp_repo: Path) -> Config:
         worktree_root=tmp_path / ".target-worktrees",
         runs_root=tmp_path / "runs",
         logs_root=tmp_path / "logs",
+        data_root=tmp_path / "data",
+        storage_db_path=tmp_path / "data" / "app.sqlite3",
         launchd_label="test",
         cli_tool="echo",
         schedule_hour=22,

@@ -8,6 +8,7 @@ from bugfix_automation.application.history_service import (
     list_ai_sessions,
     list_excel_imports,
     list_operations,
+    operation_detail,
     operation_events,
 )
 from bugfix_automation.config import Config
@@ -24,6 +25,11 @@ def get_operations(limit: int = Query(default=100, ge=1, le=500), config: Config
 @router.get("/operations/{operation_id}/events")
 def get_operation_events(operation_id: str, config: Config = Depends(get_config)):
     return operation_events(config, operation_id)
+
+
+@router.get("/operations/{operation_id}")
+def get_operation_detail(operation_id: str, config: Config = Depends(get_config)):
+    return operation_detail(config, operation_id)
 
 
 @router.get("/excel-imports")

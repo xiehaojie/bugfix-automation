@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from typing import Any
 
@@ -10,6 +12,7 @@ from bugfix_automation.config import Config
 from bugfix_automation.excel_writer import update_cell_by_header
 from bugfix_automation.runner import list_bugs
 from bugfix_automation.runner import assert_scope_clean, codex_command, codex_log_path, runtime_path_prefix
+from bugfix_automation.storage.repositories import create_ai_session, create_operation, finish_ai_session, finish_operation, index_ai_log_segments, new_id
 from bugfix_automation.task_state import is_task_active, set_task_state, task_state
 from bugfix_automation.worktree import changed_paths, commit_all, create_no_push_git_wrapper, symlink_node_modules, tracked_changed_files, write_worktree_exclude
 
@@ -96,10 +99,24 @@ def approve_fix(config: Config, branch: str) -> str:
     changed_files = tracked_changed_files(fix.path, config.target_app_path)
     if not changed_files:
         raise RuntimeError("没有可审批的 pc-web 改动")
+    diff_preview = _diff_preview(fix.path, config.target_app_path)
     scope = config.target_app_path.rstrip("/").split("/")[-1] or "frontend"
     message = f"fix({scope}): {branch.removeprefix('fix/')}"
     commit = commit_all(fix.path, message, config.target_app_path)
     mark_excel_processed(config, branch)
+    _record_branch_operation(
+        config,
+        kind="fix-approve",
+        status="committed",
+        branch=branch,
+        summary={
+            "title": "已审批并提交修复",
+            "commit": commit,
+            "changed_files": changed_files,
+            "diff_preview": diff_preview,
+            "log_path": str(codex_log_path(config, branch)),
+        },
+    )
     remove_worktree(config, branch)
     return commit
 
@@ -110,15 +127,36 @@ def reject_fix(config: Config, branch: str) -> None:
         raise RuntimeError(f"任务仍在执行中，不能拒绝删除：{state.get('status', '')}/{state.get('phase', '')}")
     from bugfix_automation.application.fix_validation_service import discard_preview_for_source_branch
 
+    changed_files: list[str] = []
+    diff_preview = ""
+    try:
+        fix = _find_fix(config, branch)
+        changed_files = tracked_changed_files(fix.path, config.target_app_path)
+        diff_preview = _diff_preview(fix.path, config.target_app_path)
+    except RuntimeError:
+        fix = None
     discard_preview_for_source_branch(config, branch)
     # 尝试移除 worktree（可能已经不存在）
     try:
-        fix = _find_fix(config, branch)
+        if fix is None:
+            fix = _find_fix(config, branch)
         subprocess.run(["git", "worktree", "remove", "--force", str(fix.path)], cwd=config.target_repo, capture_output=True)
     except RuntimeError:
         pass  # worktree 可能已被移除
     # 删除本地分支
     subprocess.run(["git", "branch", "-D", branch], cwd=config.target_repo, capture_output=True)
+    _record_branch_operation(
+        config,
+        kind="fix-reject",
+        status="rejected",
+        branch=branch,
+        summary={
+            "title": "已拒绝并删除修复",
+            "changed_files": changed_files,
+            "diff_preview": diff_preview,
+            "log_path": str(codex_log_path(config, branch)),
+        },
+    )
 
 
 def remove_worktree(config: Config, branch: str) -> None:
@@ -173,14 +211,51 @@ def rework_fix(config: Config, branch: str, note: str = "", file_paths: list[str
     symlink_node_modules(fix.path, config.target_repo)
     git_wrapper_dir = create_no_push_git_wrapper(fix.path)
     path_prefix = runtime_path_prefix(config.target_repo, git_wrapper_dir)
-    set_task_state(config, branch, "reworking", detail="正在根据补充信息重新修改。", phase="codex", image_paths=normalized_images)
+    operation_id = _create_branch_operation(
+        config,
+        kind="fix-rework",
+        status="running",
+        branch=branch,
+        summary={
+            "title": "正在根据补充对话重新修改",
+            "note": note,
+            "file_paths": file_paths or [],
+            "image_paths": [str(path) for path in normalized_images],
+            "log_path": str(codex_log_path(config, branch)),
+        },
+    )
+    ai_session_id, ai_log_path = _start_rework_ai_session(config, operation_id, branch, fix.path, prompt)
+    set_task_state(config, branch, "reworking", detail="正在根据补充信息重新修改。", phase="codex", image_paths=normalized_images, operation_id=operation_id)
     try:
         _run(codex_command(config.cli_tool, str(fix.path), prompt, normalized_images), cwd=fix.path, path_prefix=path_prefix, stdin_text=prompt, log_path=codex_log_path(config, branch))
         assert_scope_clean(changed_paths(fix.path), config.target_app_path)
         _git(fix.path, ["diff", "--check", "--", config.target_app_path])
-        set_task_state(config, branch, "pending-approval", detail="重新修改完成，等待审批。", phase="done", image_paths=normalized_images)
+        changed_files = tracked_changed_files(fix.path, config.target_app_path)
+        _finish_rework_ai_session(config, ai_session_id, ai_log_path, codex_log_path(config, branch), "succeeded", branch, changed_files)
+        finish_operation(
+            config.storage_db_path,
+            operation_id=operation_id,
+            status="succeeded",
+            summary=_summary_json({
+                "title": "重新修改完成，等待审批",
+                "note": note,
+                "file_paths": file_paths or [],
+                "image_paths": [str(path) for path in normalized_images],
+                "changed_files": changed_files,
+                "diff_preview": _diff_preview(fix.path, config.target_app_path),
+                "log_path": str(codex_log_path(config, branch)),
+            }),
+        )
+        set_task_state(config, branch, "pending-approval", detail="重新修改完成，等待审批。", phase="done", image_paths=normalized_images, operation_id=operation_id)
     except Exception as exc:
-        set_task_state(config, branch, "failed", detail=f"{type(exc).__name__}: {exc}", phase="failed", image_paths=normalized_images)
+        _finish_rework_ai_session(config, ai_session_id, ai_log_path, codex_log_path(config, branch), "failed", branch, [])
+        finish_operation(
+            config.storage_db_path,
+            operation_id=operation_id,
+            status="failed",
+            summary=_summary_json({"title": "重新修改失败", "error": f"{type(exc).__name__}: {exc}", "note": note, "log_path": str(codex_log_path(config, branch))}),
+        )
+        set_task_state(config, branch, "failed", detail=f"{type(exc).__name__}: {exc}", phase="failed", image_paths=normalized_images, operation_id=operation_id)
         raise
 
 
@@ -194,6 +269,75 @@ def _find_fix(config: Config, branch: str) -> FixWorktree:
 def _git(cwd: Path, args: list[str]) -> str:
     result = subprocess.run(["git", *args], cwd=cwd, text=True, capture_output=True, check=True)
     return result.stdout
+
+
+def _create_branch_operation(config: Config, *, kind: str, status: str, branch: str, summary: dict[str, Any]) -> str:
+    state = task_state(config, branch)
+    return create_operation(
+        config.storage_db_path,
+        kind=kind,
+        workspace_id=config.active_workspace,
+        status=status,
+        branch=branch,
+        issue_id=str(state.get("issue_id") or _branch_issue_id(branch)),
+        excel_row=int(state["excel_row"]) if state.get("excel_row") else None,
+        summary=_summary_json(summary),
+    )
+
+
+def _record_branch_operation(config: Config, *, kind: str, status: str, branch: str, summary: dict[str, Any]) -> None:
+    try:
+        _create_branch_operation(config, kind=kind, status=status, branch=branch, summary=summary)
+    except Exception:
+        pass
+
+
+def _summary_json(summary: dict[str, Any]) -> str:
+    return json.dumps(summary, ensure_ascii=False, sort_keys=True)
+
+
+def _diff_preview(worktree_path: Path, target_app_path: str) -> str:
+    try:
+        return _git(worktree_path, ["diff", "--", target_app_path])[:80000]
+    except Exception:
+        return ""
+
+
+def _start_rework_ai_session(config: Config, operation_id: str, branch: str, worktree_path: Path, prompt: str) -> tuple[str, Path]:
+    ai_session_id = new_id("ai")
+    ai_dir = config.logs_root / "ai" / ai_session_id
+    prompt_path = ai_dir / "prompt.txt"
+    ai_log_path = ai_dir / "full.log"
+    ai_dir.mkdir(parents=True, exist_ok=True)
+    prompt_path.write_text(prompt, encoding="utf-8")
+    create_ai_session(
+        config.storage_db_path,
+        operation_id=operation_id,
+        provider="local-cli",
+        cli_tool=config.cli_tool,
+        workspace_path=worktree_path,
+        prompt_path=prompt_path,
+        log_path=ai_log_path,
+        ai_session_id=ai_session_id,
+    )
+    return ai_session_id, ai_log_path
+
+
+def _finish_rework_ai_session(config: Config, ai_session_id: str, ai_log_path: Path, branch_log_path: Path, status: str, branch: str, changed_files: list[str]) -> None:
+    try:
+        if branch_log_path.exists():
+            ai_log_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(branch_log_path, ai_log_path)
+        index_ai_log_segments(config.storage_db_path, ai_session_id=ai_session_id, log_path=ai_log_path)
+        finish_ai_session(
+            config.storage_db_path,
+            ai_session_id=ai_session_id,
+            status=status,
+            log_path=ai_log_path,
+            summary={"branch": branch, "changed_files": changed_files},
+        )
+    except Exception:
+        pass
 
 
 def _run(command: list[str], cwd: Path, path_prefix: str | Path | None = None, stdin_text: str | None = None, log_path: Path | None = None) -> None:

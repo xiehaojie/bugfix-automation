@@ -160,3 +160,67 @@ export type FixValidation = {
   created_at: string;
   updated_at: string;
 };
+
+export type HistoryStats = {
+  total: number;
+  runs: number;
+  submitted: number;
+  rejected: number;
+  reworked: number;
+  previewed: number;
+  failed: number;
+};
+
+export type HistoryOperation = {
+  id: string;
+  kind: string;
+  status: string;
+  workspace_id: string;
+  branch: string;
+  issue_id: string;
+  excel_row?: number | null;
+  started_at: string;
+  ended_at?: string | null;
+  summary: string;
+  summary_text: string;
+  summary_data: Record<string, unknown>;
+};
+
+export type HistoryEvent = {
+  id: string;
+  operation_id: string;
+  event_type: string;
+  status: string;
+  message: string;
+  payload_json: string;
+  created_at: string;
+};
+
+export type HistoryAiSession = {
+  id: string;
+  operation_id: string;
+  provider: string;
+  cli_tool: string;
+  workspace_path: string;
+  prompt_path: string;
+  log_path: string;
+  status: string;
+  started_at: string;
+  ended_at?: string | null;
+  prompt_preview: string;
+  log_preview: string;
+  summary_data: Record<string, unknown>;
+};
+
+export type HistoryOperationsPayload = {
+  items: HistoryOperation[];
+  stats: HistoryStats;
+};
+
+export type HistoryDetailPayload = {
+  operation: HistoryOperation;
+  events: HistoryEvent[];
+  ai_sessions: HistoryAiSession[];
+  diff_preview: string;
+  changed_files: string[];
+};

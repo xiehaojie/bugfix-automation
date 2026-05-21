@@ -2,12 +2,14 @@ import subprocess
 import tempfile
 import unittest
 import unittest.mock
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from bugfix_automation.api.app import create_app
 from bugfix_automation.config import Config
+from bugfix_automation.storage.repositories import create_ai_session, create_operation, finish_ai_session
 
 
 class FastApiApprovalTest(unittest.TestCase):
@@ -77,7 +79,17 @@ class FastApiApprovalTest(unittest.TestCase):
 
     def test_history_endpoint_returns_operations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            client = TestClient(create_app(self.make_config(Path(tmp))), raise_server_exceptions=False)
+            config = self.make_config(Path(tmp))
+            operation_id = create_operation(
+                config.storage_db_path,
+                kind="fix-reject",
+                workspace_id="pc-web",
+                status="rejected",
+                branch="fix/1-demo",
+                issue_id="1",
+                summary=json.dumps({"title": "已拒绝并删除修复", "diff_preview": "diff --git a/a b/a"}),
+            )
+            client = TestClient(create_app(config), raise_server_exceptions=False)
 
             response = client.get("/api/history/operations")
 
@@ -85,6 +97,46 @@ class FastApiApprovalTest(unittest.TestCase):
         payload = response.json()
         self.assertIn("items", payload)
         self.assertIsInstance(payload["items"], list)
+        self.assertEqual(payload["items"][0]["id"], operation_id)
+        self.assertEqual(payload["items"][0]["summary_text"], "已拒绝并删除修复")
+        self.assertEqual(payload["stats"]["rejected"], 1)
+
+    def test_history_detail_returns_diff_and_ai_previews(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.make_config(root)
+            operation_id = create_operation(
+                config.storage_db_path,
+                kind="fix-rework",
+                workspace_id="pc-web",
+                status="succeeded",
+                branch="fix/1-demo",
+                summary=json.dumps({"title": "重新修改完成", "changed_files": ["apps/pc-web/a.tsx"], "diff_preview": "+new"}),
+            )
+            prompt_path = root / "prompt.txt"
+            log_path = root / "ai.log"
+            prompt_path.write_text("修复输入框", encoding="utf-8")
+            log_path.write_text("AI 修改了 a.tsx", encoding="utf-8")
+            session_id = create_ai_session(
+                config.storage_db_path,
+                operation_id=operation_id,
+                provider="local-cli",
+                cli_tool="codex",
+                workspace_path=root / "worktree",
+                prompt_path=prompt_path,
+                log_path=log_path,
+            )
+            finish_ai_session(config.storage_db_path, ai_session_id=session_id, status="succeeded", log_path=log_path, summary={"branch": "fix/1-demo"})
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+
+            response = client.get(f"/api/history/operations/{operation_id}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["diff_preview"], "+new")
+        self.assertEqual(payload["changed_files"], ["apps/pc-web/a.tsx"])
+        self.assertIn("修复输入框", payload["ai_sessions"][0]["prompt_preview"])
+        self.assertIn("AI 修改了 a.tsx", payload["ai_sessions"][0]["log_preview"])
 
     def test_config_endpoint_returns_current_config_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
