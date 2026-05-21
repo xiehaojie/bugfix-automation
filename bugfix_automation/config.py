@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -118,8 +120,8 @@ def load_config(config_path: Path | None = None) -> Config:
     if not isinstance(prompt, dict):
         prompt = {}
     excel_profile = _excel_profile(yaml_values.get("excel_profile"))
-    branch_summary_fields = _string_tuple(
-        yaml_values.get("branch_summary_fields"), excel_profile.branch_summary_fields or ("问题描述",)
+    branch_summary_fields = excel_profile.branch_summary_fields or _string_tuple(
+        yaml_values.get("branch_summary_fields"), ("问题描述",)
     )
     global_max_concurrency = int(value("max_concurrency", "BUGFIX_MAX_CONCURRENCY", active.max_concurrency if active else 2))
     return Config(
@@ -145,8 +147,8 @@ def load_config(config_path: Path | None = None) -> Config:
         workspaces=workspaces,
         filters=filters,
         branch_summary_fields=branch_summary_fields,
-        prompt_fields=_string_tuple(prompt.get("fields"), excel_profile.prompt_fields or DEFAULT_PROMPT_FIELDS),
-        prompt_template=str(prompt.get("template", excel_profile.prompt_template or DEFAULT_PROMPT_TEMPLATE)),
+        prompt_fields=excel_profile.prompt_fields or _string_tuple(prompt.get("fields"), DEFAULT_PROMPT_FIELDS),
+        prompt_template=excel_profile.prompt_template or str(prompt.get("template", DEFAULT_PROMPT_TEMPLATE)),
         prompt_context_paths=(*_string_tuple(prompt.get("context_paths"), ()), *(active.prompt_context_paths if active else ())),
         max_concurrency=max(1, min(int(os.environ.get("BUGFIX_MAX_CONCURRENCY", global_max_concurrency)), 8)),
         validation_target_branches=_string_tuple(value("validation_target_branches", "BUGFIX_VALIDATION_TARGET_BRANCHES", ("main", "master", "develop"))),
@@ -163,12 +165,23 @@ def default_config_path() -> Path:
 
 
 def _read_sqlite_settings(db_path: Path) -> dict[str, Any]:
-    from bugfix_automation.storage.settings import get_settings
+    if not db_path.exists():
+        return {}
 
     try:
-        return get_settings(db_path)
+        with sqlite3.connect(db_path) as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute("SELECT key, value_json FROM app_settings").fetchall()
     except Exception:
         return {}
+
+    settings: dict[str, Any] = {}
+    for row in rows:
+        try:
+            settings[str(row["key"])] = json.loads(str(row["value_json"]))
+        except Exception:
+            settings[str(row["key"])] = None
+    return settings
 
 
 def _merge_runtime_settings(yaml_values: dict[str, Any], sqlite_settings: dict[str, Any]) -> dict[str, Any]:

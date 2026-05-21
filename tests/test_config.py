@@ -21,6 +21,19 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.data_root, repo_root_path() / "data")
         self.assertEqual(config.storage_db_path, repo_root_path() / "data" / "app.sqlite3")
 
+    def test_load_config_does_not_create_missing_sqlite_database(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "missing.sqlite3"
+            config_path.write_text(f"storage_db_path: {db_path}\n", encoding="utf-8")
+
+            self.assertFalse(db_path.exists())
+            config = load_config(config_path)
+
+        self.assertEqual(config.storage_db_path, db_path)
+        self.assertFalse(db_path.exists())
+
     def test_load_config_reads_yaml_and_resolves_relative_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.yaml"
@@ -138,6 +151,35 @@ prompt:
         self.assertIn("apps/admin/src/pages", config.prompt_context_paths)
         self.assertEqual(config.branch_summary_fields, ("问题描述",))
 
+    def test_load_config_prefers_yaml_excel_profile_prompt_over_top_level_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.yaml"
+            path.write_text(
+                """
+branch_summary_fields:
+  - 顶层摘要
+prompt:
+  fields:
+    - 顶层字段
+  template: top-level template
+excel_profile:
+  prompt:
+    fields:
+      - 画像字段
+      - 画像详情
+    template: profile template
+    branch_summary_fields:
+      - 画像摘要
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+
+        self.assertEqual(config.prompt_fields, ("画像字段", "画像详情"))
+        self.assertEqual(config.prompt_template, "profile template")
+        self.assertEqual(config.branch_summary_fields, ("画像摘要",))
+
     def test_load_config_merges_sqlite_settings_over_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -176,7 +218,19 @@ prompt:
             root = Path(tmp)
             config_path = root / "config.yaml"
             db_path = root / "data" / "app.sqlite3"
-            config_path.write_text(f"storage_db_path: {db_path}\n", encoding="utf-8")
+            config_path.write_text(
+                f"""
+storage_db_path: {db_path}
+branch_summary_fields:
+  - yaml summary
+prompt:
+  fields:
+    - yaml field
+  template: yaml template
+""",
+                encoding="utf-8",
+            )
+            set_setting(db_path, "prompt", {"fields": ["db field"], "template": "db template"})
             set_setting(
                 db_path,
                 "excel_profile",
