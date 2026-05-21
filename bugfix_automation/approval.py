@@ -108,6 +108,9 @@ def reject_fix(config: Config, branch: str) -> None:
     if is_task_active(config, branch):
         state = task_state(config, branch)
         raise RuntimeError(f"任务仍在执行中，不能拒绝删除：{state.get('status', '')}/{state.get('phase', '')}")
+    from bugfix_automation.application.fix_validation_service import discard_preview_for_source_branch
+
+    discard_preview_for_source_branch(config, branch)
     # 尝试移除 worktree（可能已经不存在）
     try:
         fix = _find_fix(config, branch)

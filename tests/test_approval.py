@@ -5,12 +5,14 @@ import unittest.mock
 import zipfile
 from datetime import datetime
 from pathlib import Path
+import shutil
 import subprocess
 
 from bugfix_automation.application.bug_service import bug_payload
 from bugfix_automation.application.excel_service import upload_excel_from_multipart
-from bugfix_automation.approval import approve_fix, count_pending, parse_worktree_list
-from bugfix_automation.config import Config
+from bugfix_automation.application import fix_validation_service
+from bugfix_automation.approval import approve_fix, count_pending, parse_worktree_list, reject_fix
+from bugfix_automation.config import Config, WorkspaceConfig
 from bugfix_automation.filtering import filter_bugs
 
 
@@ -85,6 +87,122 @@ branch refs/heads/feature/demo
             self.assertFalse(worktree.exists())
             branch_check = subprocess.run(["git", "rev-parse", "--verify", "fix/1-demo"], cwd=repo, capture_output=True)
             self.assertEqual(branch_check.returncode, 0)
+
+    def test_reject_fix_removes_preview_integration_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+            app_file = repo / "apps" / "pc-web" / "a.txt"
+            app_file.parent.mkdir(parents=True)
+            app_file.write_text("old\n", encoding="utf-8")
+            subprocess.run(["git", "add", "apps/pc-web/a.txt"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["git", "checkout", "-b", "fix/1-demo"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            app_file.write_text("new\n", encoding="utf-8")
+            subprocess.run(["git", "add", "apps/pc-web/a.txt"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "fix"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["git", "checkout", "main"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            config = Config(
+                excel_path=root / "bugs.xlsx",
+                sheet_name="Sheet1",
+                assignee="谢浩杰",
+                target_repo=repo,
+                target_app_path="apps/pc-web",
+                worktree_root=root / "worktrees",
+                runs_root=root / "runs",
+                logs_root=root / "logs",
+                launchd_label="local.test",
+                cli_tool="codex",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+                active_workspace="pc-web",
+                workspaces=(
+                    WorkspaceConfig(
+                        id="pc-web",
+                        name="PC Web",
+                        target_repo=repo,
+                        target_app_path="apps/pc-web",
+                        scope_paths=("apps/pc-web",),
+                        verify_commands=(),
+                        prompt_context_paths=(),
+                        max_concurrency=2,
+                    ),
+                ),
+            )
+            validation = fix_validation_service.verify(config, "fix/1-demo")
+
+            reject_fix(config, "fix/1-demo")
+
+            integration_check = subprocess.run(["git", "rev-parse", "--verify", validation["integration_branch"]], cwd=repo, capture_output=True)
+            source_check = subprocess.run(["git", "rev-parse", "--verify", "fix/1-demo"], cwd=repo, capture_output=True)
+
+        self.assertNotEqual(integration_check.returncode, 0)
+        self.assertNotEqual(source_check.returncode, 0)
+        self.assertFalse(Path(validation["integration_worktree"]).exists())
+
+    def test_reject_fix_prunes_stale_preview_worktree_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = root / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+            app_file = repo / "apps" / "pc-web" / "a.txt"
+            app_file.parent.mkdir(parents=True)
+            app_file.write_text("old\n", encoding="utf-8")
+            subprocess.run(["git", "add", "apps/pc-web/a.txt"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["git", "checkout", "-b", "fix/1-demo"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            app_file.write_text("new\n", encoding="utf-8")
+            subprocess.run(["git", "add", "apps/pc-web/a.txt"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "fix"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["git", "checkout", "main"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            config = Config(
+                excel_path=root / "bugs.xlsx",
+                sheet_name="Sheet1",
+                assignee="谢浩杰",
+                target_repo=repo,
+                target_app_path="apps/pc-web",
+                worktree_root=root / "worktrees",
+                runs_root=root / "runs",
+                logs_root=root / "logs",
+                launchd_label="local.test",
+                cli_tool="codex",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+                active_workspace="pc-web",
+                workspaces=(
+                    WorkspaceConfig(
+                        id="pc-web",
+                        name="PC Web",
+                        target_repo=repo,
+                        target_app_path="apps/pc-web",
+                        scope_paths=("apps/pc-web",),
+                        verify_commands=(),
+                        prompt_context_paths=(),
+                        max_concurrency=2,
+                    ),
+                ),
+            )
+            validation = fix_validation_service.verify(config, "fix/1-demo")
+            shutil.rmtree(validation["integration_worktree"])
+
+            reject_fix(config, "fix/1-demo")
+
+            worktrees = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=repo, text=True, capture_output=True, check=True).stdout
+            integration_check = subprocess.run(["git", "rev-parse", "--verify", validation["integration_branch"]], cwd=repo, capture_output=True)
+
+        self.assertNotIn(validation["integration_worktree"], worktrees)
+        self.assertNotEqual(integration_check.returncode, 0)
 
     def test_bug_payload_contains_filtered_excel_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

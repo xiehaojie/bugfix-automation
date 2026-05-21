@@ -261,6 +261,32 @@ def remove_preview(config: Config, branch: str) -> dict[str, Any]:
         return data
 
 
+def discard_preview_for_source_branch(config: Config, branch: str) -> None:
+    """Remove any uncommitted preview branch/worktree tied to a rejected fix branch."""
+    _validate_fix_branch(config, branch)
+    path = _validation_json_path(config, branch)
+    if not path.exists():
+        return
+    with _validation_lock(config, branch):
+        if not path.exists():
+            return
+        data = get_validation(config, branch)
+        if data.get("status") == "committed":
+            return
+
+        workspace = active_workspace_config(config) if config.workspaces else None
+        target_repo = workspace.target_repo if workspace else config.target_repo
+        with _repo_lock(config):
+            _remove_preview_artifacts(
+                config,
+                target_repo,
+                Path(data["integration_worktree"]),
+                data["integration_branch"],
+            )
+        data["status"] = "preview-removed"
+        _save_validation(config, branch, data)
+
+
 def cleanup_source(config: Config, branch: str) -> dict[str, Any]:
     _validate_fix_branch(config, branch)
     with _validation_lock(config, branch):
@@ -530,12 +556,25 @@ def _record_commit_op(config: Config, branch: str, commit_sha: str, location: st
 
 def _remove_preview_artifacts(config: Config, target_repo: Path, worktree_path: Path, integration_branch: str) -> None:
     _ensure_child_path(worktree_path, (_worktree_root(config),))
-    if worktree_path.exists():
+    if _is_registered_worktree(target_repo, worktree_path):
         _run_git_quiet(target_repo, ["worktree", "remove", "--force", str(worktree_path)])
+        if _is_registered_worktree(target_repo, worktree_path):
+            _run_git_quiet(target_repo, ["worktree", "prune"])
     if integration_branch.startswith("integration/"):
         _run_git_quiet(target_repo, ["branch", "-D", integration_branch])
     if worktree_path.exists():
-        shutil.rmtree(worktree_path)
+        shutil.rmtree(worktree_path, ignore_errors=True)
+
+
+def _is_registered_worktree(target_repo: Path, worktree_path: Path) -> bool:
+    rc, out, _ = _git_rc(target_repo, ["worktree", "list", "--porcelain"])
+    if rc != 0:
+        return False
+    expected = worktree_path.resolve()
+    for line in out.splitlines():
+        if line.startswith("worktree ") and Path(line.removeprefix("worktree ")).resolve() == expected:
+            return True
+    return False
 
 
 def _branch_has_commits(target_repo: Path, branch: str, base_branch: str) -> bool:
