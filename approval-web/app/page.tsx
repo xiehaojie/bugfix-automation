@@ -11,7 +11,6 @@ import {
   FileSliders,
   FolderDot,
   FolderSync,
-  GitMerge,
   History,
   Loader2,
   PackageCheck,
@@ -24,7 +23,6 @@ import {
   X,
   Zap
 } from "lucide-react";
-import Link from "next/link";
 import { Select, Tooltip } from "antd";
 import { Badge } from "../src/components/ui/Badge";
 import { MultiSelectTags } from "../src/components/ui/MultiSelectTags";
@@ -101,7 +99,7 @@ export default function ApprovalPage() {
   const [previewBug, setPreviewBug] = useState<BugItem | null>(null);
   const [configExpanded, setConfigExpanded] = useState(false);
   const [showWorkspaceManager, setShowWorkspaceManager] = useState(false);
-  const [mainTab, setMainTab] = useState<"pending" | "running" | "done" | "integration" | "history">("pending");
+  const [mainTab, setMainTab] = useState<"pending" | "running" | "done" | "history">("pending");
   const [cliTestResult, setCliTestResult] = useState<{ ok: boolean; version?: string; error?: string } | null>(null);
   const [cliTesting, setCliTesting] = useState(false);
   const [scrollToFile, setScrollToFile] = useState<string | null>(null);
@@ -366,10 +364,6 @@ export default function ApprovalPage() {
                 已完成
                 <span className="mainTabCount done">{doneItems.length}</span>
               </button>
-              <button className={`mainTab ${mainTab === "integration" ? "active" : ""}`} onClick={() => setMainTab("integration")}>
-                <GitMerge size={14} />
-                集成
-              </button>
               <button className={`mainTab ${mainTab === "history" ? "active" : ""}`} onClick={() => setMainTab("history")}>
                 <History size={14} />
                 记录
@@ -379,7 +373,6 @@ export default function ApprovalPage() {
               {mainTab === "pending" ? `等待处理 ${bugs.length} 个 Excel 命中` : null}
               {mainTab === "running" ? `正在执行 ${runningItems.length} 个修复任务` : null}
               {mainTab === "done" ? `已完成 ${doneItems.length} 个 worktree` : null}
-              {mainTab === "integration" ? "进入集成预演页，选择真实 fix/* 分支和目标分支" : null}
               {mainTab === "history" ? "查看修复、提交、拒绝、重改和 AI 对话记录" : null}
             </div>
           </div>
@@ -400,13 +393,6 @@ export default function ApprovalPage() {
                 : <div className="branchGrid">{doneItems.map(item => (
                     <BranchButton key={item.branch} item={item} active={item.branch === selected?.branch} validationStatus={item.branch === selected?.branch ? fixValidation?.status : undefined} onClick={() => setSelectedBranch(item.branch)} />
                   ))}</div>
-            )}
-            {mainTab === "integration" && (
-              <div className="tabEmpty integration">
-                <GitMerge size={20} />
-                <span>集成预演已收敛到独立页面，避免从当前 Excel 列表误判可合并分支。</span>
-                <Link className="button primary" href="/integration">打开集成预演</Link>
-              </div>
             )}
             {mainTab === "history" && (
               <OperationHistoryPanel
