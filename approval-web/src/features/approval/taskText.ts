@@ -31,7 +31,7 @@ export function taskTone(item: TaskLike) {
 export function phaseLabel(phase: string) {
   if (phase === "prepare") return "正在准备 worktree";
   if (phase === "codex") return "Codex 正在分析并修改";
-  if (phase === "verify") return "正在执行校验命令";
+  if (phase === "verify") return "正在生成提交预演";
   if (phase === "done") return "已结束";
   if (phase === "queued") return "正在排队";
   if (phase === "failed") return "执行失败";

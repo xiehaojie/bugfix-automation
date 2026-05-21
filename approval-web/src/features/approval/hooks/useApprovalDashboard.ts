@@ -29,8 +29,6 @@ export function useApprovalDashboard() {
   const [cliTool, setCliTool] = useState("codex");
   const [fixValidation, setFixValidation] = useState<FixValidation | null>(null);
   const [commitLocation, setCommitLocation] = useState<CommitLocation>("integration");
-  const [verifyLog, setVerifyLog] = useState("");
-  const [verifyCommands, setVerifyCommands] = useState("");
   const selectedBranchRef = useRef("");
 
   const selected = useMemo(
@@ -73,16 +71,6 @@ export function useApprovalDashboard() {
     setLogPayload(await fetchJson<LogPayload>(`/api/logs?branch=${encodeURIComponent(branch)}`));
   }, []);
 
-  const refreshVerifyLog = useCallback(async (branch: string) => {
-    if (!branch) { setVerifyLog(""); return; }
-    try {
-      const data = await fetchJson<{ ok: boolean; content: string }>(`/api/fix-validations/${encodeURIComponent(branch)}/verify-log`);
-      if (selectedBranchRef.current === branch) setVerifyLog(data.content ?? "");
-    } catch {
-      setVerifyLog("");
-    }
-  }, []);
-
   const refreshFixValidation = useCallback(async (branch: string) => {
     if (!branch) {
       setFixValidation(null);
@@ -122,19 +110,15 @@ export function useApprovalDashboard() {
     setPromptTemplate(config.prompt.template);
     setMaxConcurrency(String(config.max_concurrency));
     setCliTool(config.cli_tool || "codex");
-    const ws = config.workspaces.find(w => w.id === config.active_workspace);
-    if (ws) setVerifyCommands((ws.verify_commands ?? []).join("\n"));
   }, [config]);
 
   useEffect(() => {
     const branch = selected?.branch ?? "";
     selectedBranchRef.current = branch;
     setFixValidation(null);
-    setVerifyLog("");
     void refreshLog(branch);
     void refreshFixValidation(branch);
-    void refreshVerifyLog(branch);
-  }, [refreshFixValidation, refreshLog, refreshVerifyLog, selected?.branch]);
+  }, [refreshFixValidation, refreshLog, selected?.branch]);
 
   const switchWorkspace = useCallback(async (workspaceId: string) => {
     if (!config || workspaceId === config.active_workspace) return;
@@ -149,7 +133,6 @@ export function useApprovalDashboard() {
       target_app_path: ws.target_app_path,
       prompt: { ...config.prompt, context_paths: ws.prompt_context_paths },
     });
-    setVerifyCommands((ws.verify_commands ?? []).join("\n"));
     setBusyAction("switch-workspace");
     try {
       await fetchJson("/api/workspace/select", {
@@ -207,7 +190,6 @@ export function useApprovalDashboard() {
       await refresh();
       await refreshLog(selected.branch);
       await refreshFixValidation(selected.branch);
-      await refreshVerifyLog(selected.branch);
     } catch (error) {
       setToast(error instanceof Error ? error.message : "操作失败");
     } finally {
@@ -368,8 +350,5 @@ export function useApprovalDashboard() {
     setSelectedBranch,
     toast,
     uploadExcel,
-    verifyCommands,
-    setVerifyCommands,
-    verifyLog
   };
 }

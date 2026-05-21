@@ -80,10 +80,6 @@ class IntegrationCreateRequest(BaseModel):
     max_concurrency: int = 2
 
 
-class FixValidationVerifyRequest(BaseModel):
-    verify_commands: list[str] = []
-
-
 class FixValidationCommitRequest(BaseModel):
     location: str = "integration"
 

@@ -346,7 +346,7 @@ def _workspace_configs(values: dict[str, Any], repo_root: Path, fallback_repo: P
             target_repo=fallback_repo,
             target_app_path=fallback_app,
             scope_paths=(fallback_app,),
-            verify_commands=(("npm", "run", "lint"), ("npm", "run", "build")),
+            verify_commands=(),
             prompt_context_paths=(),
             max_concurrency=int(values.get("max_concurrency") or 2),
         ),

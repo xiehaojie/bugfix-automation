@@ -18,11 +18,11 @@ const SCOPE_OPTIONS = [
   { value: "custom", label: "自定义" },
 ];
 
-const SCOPE_DEFAULTS: Record<string, { verifyCommands: string; contextPaths: string; scopePaths: string }> = {
-  frontend: { verifyCommands: "", contextPaths: "src/app\nsrc/components", scopePaths: "" },
-  backend: { verifyCommands: "", contextPaths: "internal\ncmd", scopePaths: "" },
-  fullstack: { verifyCommands: "", contextPaths: "src", scopePaths: "" },
-  custom: { verifyCommands: "", contextPaths: "", scopePaths: "" },
+const SCOPE_DEFAULTS: Record<string, { contextPaths: string; scopePaths: string }> = {
+  frontend: { contextPaths: "src/app\nsrc/components", scopePaths: "" },
+  backend: { contextPaths: "internal\ncmd", scopePaths: "" },
+  fullstack: { contextPaths: "src", scopePaths: "" },
+  custom: { contextPaths: "", scopePaths: "" },
 };
 
 type BrowseResult = { ok: boolean; current: string; parent: string; dirs: Array<{ name: string; path: string }> };
@@ -38,7 +38,6 @@ export function WorkspaceManager({ workspaces, activeWorkspace, onClose, onRefre
   const [targetAppPath, setTargetAppPath] = useState("");
   const [scope, setScope] = useState("frontend");
   const [scopePaths, setScopePaths] = useState("");
-  const [verifyCommands, setVerifyCommands] = useState(SCOPE_DEFAULTS.frontend.verifyCommands);
   const [contextPaths, setContextPaths] = useState(SCOPE_DEFAULTS.frontend.contextPaths);
 
   // Folder picker
@@ -69,7 +68,6 @@ export function WorkspaceManager({ workspaces, activeWorkspace, onClose, onRefre
   const handleScopeChange = (newScope: string) => {
     setScope(newScope);
     const defaults = SCOPE_DEFAULTS[newScope] ?? SCOPE_DEFAULTS.custom;
-    setVerifyCommands(defaults.verifyCommands);
     setContextPaths(defaults.contextPaths);
     setScopePaths(defaults.scopePaths);
   };
@@ -99,7 +97,6 @@ export function WorkspaceManager({ workspaces, activeWorkspace, onClose, onRefre
           target_app_path: targetAppPath.trim() || ".",
           scope,
           scope_paths: scopePaths.trim().split("\n").filter(Boolean).join(","),
-          verify_commands: verifyCommands.trim().split("\n").filter(Boolean).join(","),
         }),
       });
       if (data.ok === false) throw new Error("添加失败");
@@ -153,7 +150,6 @@ export function WorkspaceManager({ workspaces, activeWorkspace, onClose, onRefre
     setTargetAppPath("");
     setScope("frontend");
     setScopePaths("");
-    setVerifyCommands(SCOPE_DEFAULTS.frontend.verifyCommands);
     setContextPaths(SCOPE_DEFAULTS.frontend.contextPaths);
   };
 
@@ -235,13 +231,6 @@ export function WorkspaceManager({ workspaces, activeWorkspace, onClose, onRefre
                 <label className="wsFormField full">
                   <span>修复范围目录 <small>每行一个，AI 只修改这些路径</small></span>
                   <textarea value={scopePaths} onChange={e => setScopePaths(e.target.value)} rows={3} placeholder={"apps/pc-web/src\npackages/shared\nlibs/ui"} />
-                </label>
-                <label className="wsFormField full">
-                  <span>验证命令 <small>可留空 — AI 会自行选择 lint / 类型检查 / 测试</small></span>
-                  <textarea value={verifyCommands} onChange={e => setVerifyCommands(e.target.value)} rows={2} placeholder={"留空则交给 AI 自行决定，例如:\nnpm run lint\nnpm run build"} />
-                  <p className="wsHint">
-                    💡 留空时，自动化脚本不会强制执行任何固定命令；AI 在 prompt 中被要求自行选择合适的校验方式（如类型检查 / 单元测试 / 语法检查）。如果你的项目有<strong>稳定可用</strong>的命令，可以填在这里强制执行。
-                  </p>
                 </label>
               </div>
               <div className="wsFormActions">

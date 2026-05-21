@@ -2,12 +2,12 @@ import type { FixItem, FixValidationStatus } from "../types";
 import { phaseLabel, taskHeadline } from "../taskText";
 
 const VALIDATION_LABELS: Partial<Record<FixValidationStatus, string>> = {
-  verifying: "验证中",
+  verifying: "预演中",
   "ready-to-commit": "可提交",
   committed: "已提交",
   reverted: "已撤回",
   conflict: "冲突",
-  "verify-failed": "测试失败",
+  "verify-failed": "预演失败",
   cleaned: "已清理"
 };
 

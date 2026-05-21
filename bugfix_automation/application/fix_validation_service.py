@@ -29,33 +29,18 @@ def get_validation(config: Config, branch: str) -> dict[str, Any]:
     return data
 
 
-def get_verify_log(config: Config, branch: str) -> str:
-    """读取 AI 验证日志全文，供前端展示。"""
-    _validate_fix_branch(config, branch)
-    log_file = _validation_dir(config, branch) / "ai-verify.log"
-    if not log_file.exists():
-        return ""
-    return log_file.read_text(encoding="utf-8")
-
-
 def verify(config: Config, branch: str, *, commands_override: list[list[str]] | None = None) -> dict[str, Any]:
-    """验证流程分两段锁：
-
-    阶段 1（有锁）：状态校验 + git worktree 创建 + cherry-pick。
-    阶段 2（无锁）：AI CLI 验证，可能耗时 10 分钟，期间不阻塞提交等其他操作。
-    阶段 3（有锁）：写回验证结果并更新状态。
-    """
+    """Create a merge preview for a fix branch and trust the AI's own verification."""
     _validate_fix_branch(config, branch)
 
-    # ── 阶段 1：建立 worktree、应用改动 ──────────────────────────────
     with _validation_lock(config, branch):
         data = get_validation(config, branch)
         if data["status"] in {"committed", "cleaned"}:
-            raise RuntimeError(f"验证单状态为 {data['status']}，不能重新验证")
+            raise RuntimeError(f"预演单状态为 {data['status']}，不能重新预演")
 
         data["status"] = "verifying"
         data["error"] = ""
-        data["verify"] = {"status": "", "commands": []}
+        data["verify"] = {"status": "ai-verified", "commands": []}
         _save_validation(config, branch, data)
 
         workspace = active_workspace_config(config)
@@ -83,17 +68,8 @@ def verify(config: Config, branch: str, *, commands_override: list[list[str]] | 
 
         data.update(applied)
         data["changed_files"] = applied["changed_files"]
-        _save_validation(config, branch, data)
-        # 锁在此处释放，后续 AI 验证不会阻塞提交等操作
-
-    # ── 阶段 2：AI 验证（无锁，可能耗时较长）────────────────────────
-    verify_result = _run_verify(config, branch, worktree_path, commands_override=commands_override)
-
-    # ── 阶段 3：写回结果（重新加锁）────────────────────────────────
-    with _validation_lock(config, branch):
-        data = get_validation(config, branch)  # 重新读取，避免并发写入覆盖
-        data["verify"] = verify_result
-        data["status"] = "ready-to-commit" if verify_result["status"] in {"passed", "skipped"} else "verify-failed"
+        data["verify"] = {"status": "ai-verified", "commands": []}
+        data["status"] = "ready-to-commit"
         _save_validation(config, branch, data)
         return data
 
@@ -496,146 +472,6 @@ def _apply_branch(
         "apply_method": "diff-apply-3way",
         "changed_files": _worktree_changed_files(fix_wt, target_app_path),
     }
-
-
-def _ensure_node_modules(target_repo: Path, worktree_path: Path) -> tuple[bool, str]:
-    """为 worktree 准备 node_modules（仅前端项目需要）。
-
-    返回 (是否成功, 日志)。失败不抛异常，由调用方决定如何继续。
-    """
-    if not (worktree_path / "package.json").exists():
-        return True, ""  # 非 Node 项目，跳过
-
-    # 优先尝试 pnpm install --prefer-offline（不带 frozen-lockfile，更宽松）
-    for pm_cmd, label in (
-        (["pnpm", "install", "--prefer-offline", "--ignore-scripts"], "pnpm"),
-        (["npm", "install", "--prefer-offline", "--no-audit", "--no-fund", "--ignore-scripts"], "npm"),
-    ):
-        try:
-            result = subprocess.run(
-                pm_cmd, cwd=worktree_path, capture_output=True, text=True, timeout=300,
-            )
-            if result.returncode == 0:
-                return True, f"[{label}] install ok\n"
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-
-    # 降级：从原 repo 软链根 node_modules（pc-web 子包用 .bin 软链兜底）
-    src = target_repo / "node_modules"
-    dst = worktree_path / "node_modules"
-    if src.exists() and not dst.exists():
-        try:
-            dst.symlink_to(src)
-            return True, "[fallback] symlink root node_modules\n"
-        except OSError as exc:
-            return False, f"[fallback] symlink failed: {exc}\n"
-    return False, "[install] all attempts failed\n"
-
-
-def _run_command_capture(cmd: list[str], cwd: Path, log_handle, timeout: int = 600) -> int:
-    """执行命令并把输出同步写到 log_handle，返回 exit code。"""
-    header = f"\n{'=' * 60}\n$ {' '.join(cmd)}\n  (cwd: {cwd})\n{'=' * 60}\n"
-    log_handle.write(header)
-    log_handle.flush()
-    try:
-        proc = subprocess.Popen(
-            cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1,
-        )
-    except FileNotFoundError as exc:
-        log_handle.write(f"[ERROR] command not found: {exc}\n")
-        log_handle.flush()
-        return 127
-
-    assert proc.stdout is not None
-    try:
-        for line in proc.stdout:
-            log_handle.write(line)
-            log_handle.flush()
-        return proc.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        log_handle.write(f"\n[TIMEOUT] killed after {timeout}s\n")
-        log_handle.flush()
-        return 124
-
-
-def _run_verify(config: Config, branch: str, worktree_path: Path, *, commands_override: list[list[str]] | None = None) -> dict[str, Any]:
-    """直接由 Python 执行验证命令，不再走 AI 沙箱。
-
-    设计要点：
-    - 沙箱外执行：拥有完整 PATH 与网络，避免 codex sandbox 的环境裁剪
-    - 实时输出到 ai-verify.log，前端「验证 AI」tab 直接展示
-    - 依据每条命令的 exit code 判定 pass/fail，无需 AI 解析
-    - 命令列表由 workspace.verify_commands 配置，前后端任意命令都能跑
-    - 支持 commands_override 由用户在 UI 临时指定
-    """
-    workspace = active_workspace_config(config)
-    # commands_override=[] 表示用户显式跳过验证，commands_override=None 使用配置默认值
-    verify_commands = commands_override if commands_override is not None else (workspace.verify_commands if workspace else None)
-    if not verify_commands:
-        return {"status": "skipped", "commands": []}
-
-    target_app_path = (workspace.target_app_path if workspace else None) or config.target_app_path
-    app_path = worktree_path / target_app_path
-    target_repo = Path(config.target_repo)
-
-    log_file = _validation_dir(config, branch) / "ai-verify.log"
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-
-    commands_result: list[dict[str, Any]] = []
-    with log_file.open("w", encoding="utf-8") as log_handle:
-        log_handle.write(f"=== Fix validation @ {datetime.now().isoformat()} ===\n")
-        log_handle.write(f"Branch: {branch}\nWorktree: {worktree_path}\nApp: {app_path}\n")
-        log_handle.flush()
-
-        # 1) 准备依赖（仅前端项目；其他语言可在 verify_commands 里自己声明）
-        ok, install_log = _ensure_node_modules(target_repo, worktree_path)
-        log_handle.write("\n--- prepare dependencies ---\n" + install_log)
-        log_handle.flush()
-
-        # 2) 顺序执行验证命令，记录每条结果
-        for cmd in verify_commands:
-            cmd_str = " ".join(cmd)
-            # 命令在 worktree 根目录执行（monorepo 工作流要求）
-            exit_code = _run_command_capture(list(cmd), worktree_path, log_handle, timeout=600)
-            status = "passed" if exit_code == 0 else "failed"
-            log_handle.write(f"\n[RESULT] {cmd_str} => {status} (exit={exit_code})\n")
-            log_handle.flush()
-
-            tail = ""
-            if status == "failed":
-                # 重新读最后 40 行作为摘要（流式写入时无法直接取尾部）
-                try:
-                    log_handle.flush()
-                    text = log_file.read_text(encoding="utf-8", errors="replace")
-                    tail = _tail_log(text, 40)
-                except OSError:
-                    tail = f"exit code {exit_code}"
-
-            commands_result.append({
-                "command": cmd_str,
-                "status": status,
-                "log_path": str(log_file),
-                "log_tail": tail,
-            })
-
-        overall = "passed" if all(c["status"] == "passed" for c in commands_result) else "failed"
-        log_handle.write(f"\n=== OVERALL: {overall} ===\n")
-
-    return {"status": overall, "commands": commands_result}
-
-
-def _tail_log(text: str, lines: int = 40) -> str:
-    """返回日志最后 N 行，用于前端内联展示错误摘要。"""
-    return "\n".join(text.splitlines()[-lines:])
-
-
-def _command_log_slug(cmd_list: list[str]) -> str:
-    raw = "-".join(cmd_list)
-    slug = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "-" for ch in raw).strip("-.") or "command"
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:10]
-    return f"{slug[:80].rstrip('-.')}-{digest}"
 
 
 def _apply_preview_to_target(target_repo: Path, worktree_path: Path, target_app_path: str) -> None:

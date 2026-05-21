@@ -141,23 +141,6 @@ export function IntegrationDetail({ run, diff, busy, onStart, onConfirm, onClean
         </table>
       </div>
 
-      {/* Verify */}
-      {run.verify.commands.length > 0 && (
-        <div className="intVerifySection">
-          <h4>验证命令</h4>
-          <div className="intVerifyList">
-            {run.verify.commands.map((cmd, i) => (
-              <div key={i} className={`intVerifyItem ${cmd.status}`}>
-                <code>{cmd.command}</code>
-                <span className={`intVerifyBadge ${cmd.status === "passed" ? "green" : "red"}`}>
-                  {cmd.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* AI Review */}
       {run.ai_review.summary && (
         <div className="intAiSection">

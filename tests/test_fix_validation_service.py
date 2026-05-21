@@ -78,40 +78,18 @@ class TestVerify:
         assert result["changed_files"] == ["apps/pc-web/fix1.ts"]
         assert Path(result["integration_worktree"]).exists()
 
-    def test_copies_existing_node_modules_and_writes_unique_verify_logs(self, config: Config, tmp_repo: Path):
+    def test_preview_does_not_create_node_modules_or_verify_logs(self, config: Config, tmp_repo: Path):
         _create_fix_branch(tmp_repo, "fix/bug-logs", "logs.ts", "// logs\n")
         source_node_modules = tmp_repo / "apps" / "pc-web" / "node_modules"
         source_node_modules.mkdir()
-        config = Config(
-            **{
-                **config.__dict__,
-                "workspaces": (
-                    WorkspaceConfig(
-                        id="pc-web",
-                        name="PC Web",
-                        target_repo=tmp_repo,
-                        target_app_path="apps/pc-web",
-                        scope_paths=("apps/pc-web",),
-                        verify_commands=(("python3", "-c", "print('lint')"), ("python3", "-c", "print('build')")),
-                        prompt_context_paths=(),
-                        max_concurrency=2,
-                    ),
-                ),
-            }
-        )
 
         result = fix_validation_service.verify(config, "fix/bug-logs")
         worktree_node_modules = Path(result["integration_worktree"]) / "apps" / "pc-web" / "node_modules"
-        log_paths = [command["log_path"] for command in result["verify"]["commands"]]
 
         assert result["status"] == "ready-to-commit"
-        assert worktree_node_modules.is_dir()
-        assert not worktree_node_modules.is_symlink()
-        assert worktree_node_modules.resolve() != source_node_modules.resolve()
-        assert len(log_paths) == 2
-        assert len(set(log_paths)) == 2
-        assert log_paths[0].endswith("01-python3--c-print--lint-61991dd4c0.log")
-        assert log_paths[1].endswith("02-python3--c-print--build-b876c99295.log")
+        assert result["verify"] == {"status": "ai-verified", "commands": []}
+        assert not worktree_node_modules.exists()
+        assert not list((config.runs_root / "fix-validations").glob("*/ai-verify.log"))
 
     def test_rejects_non_fix_branch(self, config: Config):
         with pytest.raises(ValueError, match="只能验证"):

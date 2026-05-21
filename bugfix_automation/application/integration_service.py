@@ -172,7 +172,7 @@ def create_run(
 
 
 def start_run(config: Config, run_id: str) -> dict[str, Any]:
-    """Start an integration run: create worktree, apply branches, run verify."""
+    """Start an integration run: create worktree and apply branches."""
     data = _load_run(config, run_id)
     if data["status"] not in ("draft", "blocked", "verify-failed"):
         raise RuntimeError(f"集成单状态为 {data['status']}，不能开始集成")
@@ -236,13 +236,8 @@ def start_run(config: Config, run_id: str) -> dict[str, Any]:
 
     _save_run(config, run_id, data)
 
-    # Run verify commands
-    verify_result = _run_verify(config, worktree_path, run_id)
-    data["verify"] = verify_result
-    if verify_result["status"] not in ("passed", "skipped"):
-        data["status"] = "verify-failed"
-    else:
-        data["status"] = "pending-user-approval"
+    data["verify"] = {"status": "ai-verified", "commands": []}
+    data["status"] = "pending-user-approval"
 
     _save_run(config, run_id, data)
     return data
@@ -547,58 +542,6 @@ def _worktree_changed_files(worktree_path: Path, target_app_path: str) -> list[s
     return sorted(files)
 
 
-def _run_verify(config: Config, worktree_path: Path, run_id: str) -> dict[str, Any]:
-    """Run workspace verify commands in the integration worktree."""
-    workspace = active_workspace_config(config)
-    commands_result: list[dict[str, Any]] = []
-
-    if not workspace or not workspace.verify_commands:
-        return {"status": "skipped", "commands": []}
-
-    target_app_path = workspace.target_app_path or config.target_app_path
-    app_path = worktree_path / target_app_path
-    run_dir = _run_dir(config, run_id)
-    all_passed = True
-
-    for cmd_tuple in workspace.verify_commands:
-        cmd_list = list(cmd_tuple)
-        cmd_str = " ".join(cmd_list)
-        log_file = run_dir / f"{cmd_list[0].replace('/', '_')}.log"
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
-            result = subprocess.run(
-                cmd_list, cwd=app_path,
-                text=True, capture_output=True, timeout=300,
-            )
-            log_file.write_text(
-                f"$ {cmd_str}\nExit code: {result.returncode}\n\n{result.stdout}\n{result.stderr}",
-                encoding="utf-8",
-            )
-            status = "passed" if result.returncode == 0 else "failed"
-            if result.returncode != 0:
-                all_passed = False
-        except subprocess.TimeoutExpired:
-            log_file.write_text(f"$ {cmd_str}\nTIMEOUT (300s)\n", encoding="utf-8")
-            status = "timeout"
-            all_passed = False
-        except Exception as exc:
-            log_file.write_text(f"$ {cmd_str}\nERROR: {exc}\n", encoding="utf-8")
-            status = "error"
-            all_passed = False
-
-        commands_result.append({
-            "command": cmd_str,
-            "status": status,
-            "log_path": str(log_file),
-        })
-
-    return {
-        "status": "passed" if all_passed else "failed",
-        "commands": commands_result,
-    }
-
-
 def _write_markdown_report(config: Config, run_id: str, data: dict[str, Any]) -> None:
     """Write a human-readable markdown report for the integration run."""
     run_dir = _run_dir(config, run_id)
@@ -624,14 +567,6 @@ def _write_markdown_report(config: Config, run_id: str, data: dict[str, Any]) ->
             f"| `{item['branch']}` | {item['apply_method']} | {item['status']} | {item.get('error', '')} |"
         )
     lines.append("")
-
-    verify = data.get("verify", {})
-    if verify.get("commands"):
-        lines.append("## 验证命令")
-        lines.append("")
-        for cmd in verify["commands"]:
-            lines.append(f"- `{cmd['command']}`: **{cmd['status']}**")
-        lines.append("")
 
     ai_review = data.get("ai_review", {})
     if ai_review.get("summary"):

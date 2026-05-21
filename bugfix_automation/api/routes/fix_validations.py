@@ -4,20 +4,11 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from bugfix_automation.api.dependencies import get_config
-from bugfix_automation.api.schemas import BranchRequest, FixValidationCommitRequest, FixValidationVerifyRequest
+from bugfix_automation.api.schemas import BranchRequest, FixValidationCommitRequest
 from bugfix_automation.application import fix_validation_service
 from bugfix_automation.config import Config
 
 router = APIRouter(prefix="/api/fix-validations", tags=["fix-validations"])
-
-
-@router.get("/{branch:path}/verify-log")
-def get_fix_validation_verify_log(branch: str, config: Config = Depends(get_config)):
-    try:
-        content = fix_validation_service.get_verify_log(config, branch)
-        return {"ok": True, "content": content}
-    except (ValueError, RuntimeError) as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
 
 @router.get("/{branch:path}")
@@ -27,13 +18,9 @@ def get_fix_validation(branch: str, config: Config = Depends(get_config)):
 
 
 @router.post("/{branch:path}/verify")
-def verify_fix_validation(branch: str, payload: FixValidationVerifyRequest | None = None, config: Config = Depends(get_config)):
+def verify_fix_validation(branch: str, config: Config = Depends(get_config)):
     try:
-        commands_override: list[list[str]] | None = None
-        if payload is not None:
-            # 用户显式传了 payload：空列表 = 跳过验证，非空 = 使用用户指定命令
-            commands_override = [cmd.split() for cmd in payload.verify_commands if cmd.strip()]
-        data = fix_validation_service.verify(config, branch, commands_override=commands_override)
+        data = fix_validation_service.verify(config, branch)
         return {"ok": True, "validation": data}
     except (ValueError, RuntimeError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)

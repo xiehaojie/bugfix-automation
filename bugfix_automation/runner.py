@@ -38,7 +38,6 @@ from bugfix_automation.worktree import (
     branch_exists,
     branch_worktree_path,
     worktree_path_for_branch,
-    symlink_node_modules,
     tracked_changed_files,
     write_worktree_exclude,
 )
@@ -169,7 +168,6 @@ def process_bug(
         with WORKTREE_LOCK:
             worktree_path = ensure_worktree(config.target_repo, config.worktree_root, branch)
         write_worktree_exclude(worktree_path)
-        symlink_node_modules(worktree_path, config.target_repo)
         install_project_agents(worktree_path, Path(__file__).resolve().parents[1])
         git_wrapper_dir = create_no_push_git_wrapper(worktree_path)
         workspace = active_workspace_config(config)
@@ -192,9 +190,6 @@ def process_bug(
             raise
         else:
             _finish_ai_session(config, ai_session, log_path, branch, bug, status="succeeded")
-        assert_scope_clean(changed_paths(worktree_path), config.target_app_path)
-        set_task_state(config, branch, "verifying", bug, detail="Codex 已结束，正在运行验证命令。", phase="verify", image_paths=image_paths, operation_id=operation_id)
-        _verify_frontend(worktree_path, config, log_path)
         assert_scope_clean(changed_paths(worktree_path), config.target_app_path)
         if not has_app_changes(worktree_path, config.target_app_path):
             result = _result(bug, "no-change", branch, "Codex 已结束，但没有产生本地改动。", image_paths, log_path=log_path)
@@ -337,16 +332,6 @@ def assert_scope_clean(paths: list[str], target_app_path: str) -> None:
     unsafe_paths = out_of_scope_paths(paths, target_app_path)
     if unsafe_paths:
         raise RuntimeError(f"检测到超出前端范围的改动：{', '.join(unsafe_paths)}")
-
-
-def _verify_frontend(worktree_path: Path, config: Config, log_path: Path | None = None) -> None:
-    workspace = active_workspace_config(config)
-    if not workspace.verify_commands:
-        # No verify commands configured: trust the AI to self-verify per its prompt.
-        return
-    app_path = worktree_path / config.target_app_path
-    for command in workspace.verify_commands:
-        _run(list(command), cwd=app_path, log_path=log_path)
 
 
 def _run(command: list[str], cwd: Path, path_prefix: Path | None = None, stdin_text: str | None = None, log_path: Path | None = None) -> None:

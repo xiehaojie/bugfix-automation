@@ -298,21 +298,6 @@ export function IntegrationPanel({ doneBranches, workspaceId, targetBranch }: Pr
         </table>
       </div>
 
-      {/* Verify */}
-      {activeRun.verify.commands.length > 0 && (
-        <div className="intVerifySection">
-          <h4>验证命令</h4>
-          <div className="intVerifyList">
-            {activeRun.verify.commands.map((cmd, i) => (
-              <div key={i} className="intVerifyItem">
-                <code>{cmd.command}</code>
-                <span className={`intVerifyBadge ${cmd.status === "passed" ? "green" : "red"}`}>{cmd.status}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* AI */}
       {activeRun.ai_review.summary && (
         <div className="intAiSection">

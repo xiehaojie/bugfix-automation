@@ -70,6 +70,11 @@ def symlink_node_modules(worktree_path: Path, target_repo: Path) -> None:
                     dst_nm.symlink_to(nm)
 
 
+def _is_ignored_runtime_path(path: str) -> bool:
+    parts = Path(path).parts
+    return "node_modules" in parts or path.endswith("/node_modules")
+
+
 def has_app_changes(path: Path, target_app_path: str) -> bool:
     result = subprocess.run(["git", "status", "--porcelain", "--", target_app_path], cwd=path, text=True, capture_output=True, check=True)
     return bool(result.stdout.strip())
@@ -83,7 +88,7 @@ def tracked_changed_files(path: Path, target_app_path: str) -> list[str]:
         raw_path = line[3:]
         if " -> " in raw_path:
             raw_path = raw_path.split(" -> ", 1)[1]
-        if raw_path and not raw_path.startswith(automation_prefixes):
+        if raw_path and not raw_path.startswith(automation_prefixes) and not _is_ignored_runtime_path(raw_path):
             files.append(raw_path)
     return sorted(files)
 
@@ -97,7 +102,8 @@ def changed_paths(path: Path) -> list[str]:
         raw_path = line[3:]
         if " -> " in raw_path:
             raw_path = raw_path.split(" -> ", 1)[1]
-        paths.append(raw_path)
+        if not _is_ignored_runtime_path(raw_path):
+            paths.append(raw_path)
     return paths
 
 
@@ -113,6 +119,7 @@ def out_of_scope_paths(paths: list[str], target_app_path: str) -> list[str]:
         if path != target_app_path.rstrip("/")
         and not path.startswith(allowed_prefix)
         and not path.startswith(allowed_automation_paths)
+        and not _is_ignored_runtime_path(path)
     ]
 
 
@@ -135,6 +142,9 @@ def write_worktree_exclude(worktree_path: Path) -> None:
         entries += ".bugfix-automation-bin\n"
     if ".codex" not in existing:
         entries += ".codex\n"
+    for pattern in ("node_modules/", "*/node_modules/", "*/*/node_modules/", "apps/*/node_modules/", "packages/*/node_modules/", "libs/*/node_modules/"):
+        if pattern not in existing and pattern not in entries:
+            entries += f"{pattern}\n"
     if entries:
         with exclude_file.open("a", encoding="utf-8") as f:
             f.write(entries)

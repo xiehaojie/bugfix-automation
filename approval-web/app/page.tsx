@@ -94,9 +94,6 @@ export default function ApprovalPage() {
     setSelectedBranch,
     toast,
     uploadExcel,
-    verifyCommands,
-    setVerifyCommands,
-    verifyLog
   } = useApprovalDashboard();
 
   const [previewBug, setPreviewBug] = useState<BugItem | null>(null);
@@ -425,10 +422,8 @@ export default function ApprovalPage() {
                   busyAction={busyAction}
                   actionDisabled={actionDisabled}
                   commitLocation={commitLocation}
-                  verifyCommands={verifyCommands}
-                  onVerifyCommandsChange={setVerifyCommands}
                   onCommitLocationChange={setCommitLocation}
-                  onVerify={() => void postFixValidationAction("verify", "自动合并验证已完成", { verify_commands: verifyCommands.split("\n").filter(Boolean) })}
+                  onVerify={() => void postFixValidationAction("verify", "提交预演已生成")}
                   onCommit={() => void postFixValidationAction("commit", "已提交此修复", { location: commitLocation })}
                   onRevert={() => void postFixValidationAction("revert", "已撤回此提交")}
                   onUndoCommit={() => void postFixValidationAction("undo-commit", "已撤销上次提交")}
@@ -455,7 +450,6 @@ export default function ApprovalPage() {
               <AiChatPanel
                 item={selected ?? null}
                 logPayload={logPayload}
-                verifyLog={verifyLog}
                 disabled={actionDisabled}
                 loading={busyAction === "/api/rework"}
                 onRework={async (params) => {

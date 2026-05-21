@@ -24,7 +24,6 @@ type AiToolKey = (typeof AI_TOOLS)[number]["key"];
 interface AiChatPanelProps {
   item: FixItem | null;
   logPayload: LogPayload;
-  verifyLog?: string;
   disabled: boolean;
   loading: boolean;
   onRework: (params: {
@@ -41,7 +40,6 @@ interface AiChatPanelProps {
 export function AiChatPanel({
   item,
   logPayload,
-  verifyLog,
   disabled,
   loading,
   onRework,
@@ -50,7 +48,6 @@ export function AiChatPanel({
   const [imagePaths, setImagePaths] = useState<string[]>([]);
   const [senderValue, setSenderValue] = useState("");
   const [selectedTool, setSelectedTool] = useState<AiToolKey>("codex");
-  const [activeTab, setActiveTab] = useState<"fix" | "verify">("fix");
 
   /** 下拉菜单：图标 + 名称 */
   const toolMenuItems: MenuProps["items"] = AI_TOOLS.map((t) => ({
@@ -98,28 +95,11 @@ export function AiChatPanel({
 
   return (
     <div className="aiChatPanel">
-      {/* Tab 切换：仅在有验证日志时显示 */}
-      {verifyLog && (
-        <div className="aiChatTabs">
-          <button
-            className={`aiChatTab${activeTab === "fix" ? " active" : ""}`}
-            onClick={() => setActiveTab("fix")}
-          >
-            修复 AI
-          </button>
-          <button
-            className={`aiChatTab${activeTab === "verify" ? " active" : ""}`}
-            onClick={() => setActiveTab("verify")}
-          >
-            验证 AI
-          </button>
-        </div>
-      )}
       <div className="aiChatBody">
         {/* AI execution log */}
         <LogPane
-          content={activeTab === "verify" && verifyLog ? verifyLog : logPayload.content}
-          streaming={isActive && activeTab === "fix"}
+          content={logPayload.content}
+          streaming={isActive}
           placeholder={item ? "暂无 AI 执行日志" : "选择一个修复项查看对话"}
         />
       </div>
