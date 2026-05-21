@@ -67,6 +67,7 @@ def _record_excel_import(original_name: str, path: Path) -> None:
             sheet_name=config.sheet_name,
             rows=rows,
             config_snapshot_id=None,
+            mapping=config.excel_profile.canonical_fields,
         )
     except Exception:
         return

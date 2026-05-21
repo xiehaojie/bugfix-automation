@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from bugfix_automation.config import CanonicalFieldMapping
 from bugfix_automation.storage.artifacts import file_size, sha256_file
 from bugfix_automation.storage.db import connect, ensure_schema
 
@@ -137,8 +138,10 @@ def save_excel_import(
     sheet_name: str,
     rows: list[dict[str, Any]],
     config_snapshot_id: str | None,
+    mapping: CanonicalFieldMapping | None = None,
 ) -> str:
     ensure_schema(db_path)
+    fields = mapping or CanonicalFieldMapping()
     batch_id = new_id("xls")
     now = utc_now()
     with connect(db_path) as db:
@@ -161,8 +164,8 @@ def save_excel_import(
         for row in rows:
             row_json = stable_json(row)
             excel_row = int(row.get("_excel_row") or 0)
-            issue_id = str(row.get("序号") or "")
-            description = str(row.get("问题描述") or "")
+            issue_id = str(row.get(fields.issue_id) or "")
+            description = str(row.get(fields.description) or "")
             db.execute(
                 "INSERT INTO excel_import_rows("
                 "id, batch_id, excel_row, issue_id, row_json, description, assignee, "
@@ -175,9 +178,9 @@ def save_excel_import(
                     issue_id,
                     row_json,
                     description,
-                    str(row.get("对接人") or ""),
-                    str(row.get("提出人状态") or ""),
-                    str(row.get("对接人状态") or ""),
+                    str(row.get(fields.assignee) or ""),
+                    str(row.get(fields.requester_status) or ""),
+                    str(row.get(fields.assignee_status) or ""),
                     sha256_text(row_json),
                     now,
                 ),
