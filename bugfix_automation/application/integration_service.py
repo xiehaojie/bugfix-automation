@@ -536,12 +536,13 @@ def _worktree_changed_files(worktree_path: Path, target_app_path: str) -> list[s
     rc, out, _ = _git_rc(worktree_path, ["status", "--porcelain", "--", target_app_path])
     if rc != 0:
         return []
+    automation_prefixes = (".codex/", ".bugfix-automation-bin/")
     files: list[str] = []
     for line in out.splitlines():
         raw_path = line[3:]
         if " -> " in raw_path:
             raw_path = raw_path.split(" -> ", 1)[1]
-        if raw_path:
+        if raw_path and not raw_path.startswith(automation_prefixes):
             files.append(raw_path)
     return sorted(files)
 

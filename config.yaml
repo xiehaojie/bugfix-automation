@@ -1,10 +1,10 @@
 # 夜间 Bug 自动修复配置
 # 环境变量优先级更高，适合临时覆盖；平时直接改这个文件即可。
 
-excel_path: /Users/xiehaojie/Desktop/亦城数智人在线清单.xlsx
+excel_path: /Users/xiehaojie/code/bugfix-automation/uploads/谢浩杰测试bug-05201447-20260520-150326-866790.xlsx
 sheet_name: 在线问题清单
 assignee: 谢浩杰
-active_workspace: 
+active_workspace: 亦城数智人前端
 max_concurrency: 2
 
 target_repo: /Users/xiehaojie/code/monorepo
@@ -35,6 +35,17 @@ workspaces:
     prompt_context_paths: 
     max_concurrency: 2
     scope: frontend
+  - id: 亦城数智人后端
+    name: 亦城数智人后端
+    target_repo: /Users/xiehaojie/ycszr
+    repo_paths:
+      - /Users/xiehaojie/ycszr
+    target_app_path: .
+    scope_paths: .
+    verify_commands: 
+    prompt_context_paths: 
+    max_concurrency: 2
+    scope: backend
 filters:
   - field: 对接人
     op: equals

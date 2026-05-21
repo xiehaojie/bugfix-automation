@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from bugfix_automation.config import load_config, update_config_yaml
+from bugfix_automation.config import load_config, repo_root_path, update_config_yaml
 
 
 class ConfigTest(unittest.TestCase):
@@ -12,6 +12,13 @@ class ConfigTest(unittest.TestCase):
 
         self.assertIn("bugfix-automation", str(config.worktree_root))
         self.assertNotIn("/code/monorepo/.worktrees", str(config.worktree_root))
+
+    def test_storage_paths_default_to_repo_data_dir(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            config = load_config()
+
+        self.assertEqual(config.data_root, repo_root_path() / "data")
+        self.assertEqual(config.storage_db_path, repo_root_path() / "data" / "app.sqlite3")
 
     def test_load_config_reads_yaml_and_resolves_relative_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -45,7 +52,8 @@ schedule:
         self.assertEqual(config.assignee, "张三")
         self.assertEqual(config.target_repo, Path("/tmp/monorepo"))
         self.assertEqual(config.target_app_path, "apps/demo")
-        self.assertIn("bugfix-automation/.target-worktrees", str(config.worktree_root))
+        self.assertIn("bugfix-automation", str(config.worktree_root))
+        self.assertEqual(config.worktree_root.name, ".target-worktrees")
         self.assertEqual(config.schedule_hour, 21)
         self.assertEqual(config.schedule_minute, 30)
         self.assertEqual(config.approval_web_port, 9001)

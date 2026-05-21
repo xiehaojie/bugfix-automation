@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from bugfix_automation.api.errors import json_error_handler
-from bugfix_automation.api.routes import approval, bugs, config as config_routes, excel, fix_validations, integration, logs, scheduler, static_files
+from bugfix_automation.api.routes import approval, bugs, config as config_routes, excel, fix_validations, history, integration, logs, scheduler, static_files
 from bugfix_automation.config import Config
 
 
@@ -17,8 +17,9 @@ def create_app(config: Config | None = None) -> FastAPI:
             f"http://127.0.0.1:{config.approval_web_port}",
             f"http://localhost:{config.approval_web_port}",
         ] if config else [],
+        allow_origin_regex=r"^http://(127\.0\.0\.1|localhost):\d+$",
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type"],
+        allow_headers=["*"],
     )
     app.add_exception_handler(Exception, json_error_handler)
     for router in (
@@ -27,6 +28,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         config_routes.router,
         excel.router,
         fix_validations.router,
+        history.router,
         integration.router,
         logs.router,
         scheduler.router,

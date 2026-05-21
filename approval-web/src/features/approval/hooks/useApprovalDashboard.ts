@@ -106,7 +106,7 @@ export function useApprovalDashboard() {
   }, [refresh]);
 
   useAutoRefresh(refresh);
-  useLogPolling(selected?.branch, refreshLog);
+  useLogPolling(selected?.branch, setLogPayload, refreshLog, config?.api_port);
 
   useEffect(() => {
     if (!scheduler) return;
@@ -190,7 +190,7 @@ export function useApprovalDashboard() {
     }
   };
 
-  const postFixValidationAction = async (action: "verify" | "commit" | "revert" | "remove-preview" | "cleanup-source", success: string, body: Record<string, unknown> = {}) => {
+  const postFixValidationAction = async (action: "verify" | "commit" | "revert" | "undo-commit" | "remove-preview" | "cleanup-source", success: string, body: Record<string, unknown> = {}) => {
     if (!selected?.branch) return;
     setBusyAction(`fix-validation:${action}`);
     setToast("");
@@ -215,21 +215,20 @@ export function useApprovalDashboard() {
     }
   };
 
-  const uploadExcel = async () => {
-    if (!excelFile) {
+  const uploadExcel = async (file?: File | null) => {
+    const target = file ?? excelFile;
+    if (!target) {
       setToast("请先选择一个 .xlsx 文件");
       return;
     }
     const form = new FormData();
-    form.append("file", excelFile);
+    form.append("file", target);
     setBusyAction("/api/excel/upload");
     setToast("");
     try {
-      const apiPort = config?.api_port ?? 8766;
-      const uploadUrl = `http://127.0.0.1:${apiPort}/api/excel/upload`;
-      const data = await fetchJson<{ ok?: boolean; excel_path: string; file?: ConfigPayload["excel_file"] }>(uploadUrl, { method: "POST", body: form });
+      const data = await fetchJson<{ ok?: boolean; excel_path: string; file?: ConfigPayload["excel_file"] }>("/api/excel/upload", { method: "POST", body: form });
       if (data.ok === false) throw new Error("上传失败");
-      setToast(`已上传并切换：${excelFile.name}，${formatBytes(data.file?.size)}`);
+      setToast(`已上传并切换：${target.name}，${formatBytes(data.file?.size)}`);
       setExcelFile(null);
       await refresh();
     } catch (error) {

@@ -5,13 +5,15 @@ import json
 import os
 import shutil
 import subprocess
+import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
 from bugfix_automation.config import Config, active_workspace_config
-from bugfix_automation.worktree import branch_worktree_path, worktree_path_for_branch
+from bugfix_automation.storage.db import connect, ensure_schema
+from bugfix_automation.worktree import branch_worktree_path, worktree_path_for_branch, write_worktree_exclude
 
 VALIDATION_RUNS_DIR = "fix-validations"
 VALIDATION_WORKTREE_ROOT = ".validation-worktrees"
@@ -67,6 +69,7 @@ def verify(config: Config, branch: str, *, commands_override: list[list[str]] | 
             _remove_preview_artifacts(config, target_repo, worktree_path, integration_branch)
             worktree_path.parent.mkdir(parents=True, exist_ok=True)
             _run_git(target_repo, ["worktree", "add", str(worktree_path), "-b", integration_branch, target_branch])
+        write_worktree_exclude(worktree_path)
 
         target_app_path = workspace.target_app_path if workspace else config.target_app_path
         try:
@@ -136,18 +139,31 @@ def commit_validation(config: Config, branch: str, location: str) -> dict[str, A
         data["final_commit_location"] = location
         _save_validation(config, branch, data)
 
-        # 提交成功后自动清理：integration worktree/branch + fix worktree/branch
-        try:
-            _remove_preview_artifacts(config, target_repo, worktree_path, data["integration_branch"])
-        except Exception:
-            pass
-        try:
-            fix_wt = branch_worktree_path(target_repo, branch) or worktree_path_for_branch(config.worktree_root, branch)
-            if fix_wt.exists():
-                _run_git_quiet(target_repo, ["worktree", "remove", "--force", str(fix_wt)])
-            _run_git_quiet(target_repo, ["branch", "-D", branch])
-        except Exception:
-            pass
+        # 入库记录此次提交
+        _record_commit_op(config, branch, commit_sha, location, data)
+
+        if location == "target":
+            # target 提交后，integration worktree/branch 和 fix worktree/branch 均可清理
+            try:
+                _remove_preview_artifacts(config, target_repo, worktree_path, data["integration_branch"])
+            except Exception:
+                pass
+            try:
+                fix_wt = branch_worktree_path(target_repo, branch) or worktree_path_for_branch(config.worktree_root, branch)
+                if fix_wt.exists():
+                    _run_git_quiet(target_repo, ["worktree", "remove", "--force", str(fix_wt)])
+                _run_git_quiet(target_repo, ["branch", "-D", branch])
+            except Exception:
+                pass
+        else:
+            # integration 提交后：仅移除 worktree 目录（节省磁盘），保留 integration_branch 和 fix branch
+            # 保留分支使 monorepo 中可看到提交记录，且 revert/undo 仍可操作
+            try:
+                if worktree_path.exists():
+                    _run_git_quiet(target_repo, ["worktree", "remove", "--force", str(worktree_path)])
+                    shutil.rmtree(worktree_path, ignore_errors=True)
+            except Exception:
+                pass
 
         return data
 
@@ -173,12 +189,25 @@ def revert_validation(config: Config, branch: str) -> dict[str, Any]:
                 _run_git(cwd, ["revert", "--no-edit", data["final_commit"]])
                 data["revert_commit"] = _git(cwd, ["rev-parse", "HEAD"]).strip()
         else:
+            integration_branch = data["integration_branch"]
+            _temp_created = False
             if not cwd.exists():
-                raise RuntimeError("提交所在 worktree 不存在，不能撤回")
+                # worktree 已被清理，临时重建以执行 revert
+                cwd.parent.mkdir(parents=True, exist_ok=True)
+                _run_git(target_repo, ["worktree", "add", str(cwd), integration_branch])
+                _temp_created = True
             if _has_uncommitted_changes(cwd):
+                if _temp_created:
+                    _run_git_quiet(target_repo, ["worktree", "remove", "--force", str(cwd)])
                 raise RuntimeError("提交所在工作区不干净，不能撤回")
             _run_git(cwd, ["revert", "--no-edit", data["final_commit"]])
             data["revert_commit"] = _git(cwd, ["rev-parse", "HEAD"]).strip()
+            # 撤回后移除 worktree 目录，保留分支（分支含撤回 commit，monorepo 中可见）
+            try:
+                _run_git_quiet(target_repo, ["worktree", "remove", "--force", str(cwd)])
+                shutil.rmtree(cwd, ignore_errors=True)
+            except Exception:
+                pass
 
         data["status"] = "reverted"
         _save_validation(config, branch, data)
@@ -205,16 +234,31 @@ def undo_commit(config: Config, branch: str) -> dict[str, Any]:
         with _repo_lock(config):
             if location == "target":
                 _ensure_target_branch(config, target_repo, data["target_branch"])
+            _temp_created = False
             if not cwd.exists():
-                raise RuntimeError("提交所在仓库不存在")
+                if location == "integration":
+                    # worktree 已被清理，临时重建以执行 reset
+                    cwd.parent.mkdir(parents=True, exist_ok=True)
+                    _run_git(target_repo, ["worktree", "add", str(cwd), data["integration_branch"]])
+                    _temp_created = True
+                else:
+                    raise RuntimeError("提交所在仓库不存在")
             # 验证 HEAD 确实是我们的提交
             current_head = _git(cwd, ["rev-parse", "HEAD"]).strip()
             if current_head != data["final_commit"]:
+                if _temp_created:
+                    _run_git_quiet(target_repo, ["worktree", "remove", "--force", str(cwd)])
                 raise RuntimeError(
                     f"当前 HEAD ({current_head[:8]}) 不是此修复的提交 ({data['final_commit'][:8]})，"
                     "可能有新提交在其之上，不能安全撤销。请用「撤回此提交」(revert) 代替。"
                 )
             _run_git(cwd, ["reset", "--soft", "HEAD~1"])
+            if _temp_created:
+                try:
+                    _run_git_quiet(target_repo, ["worktree", "remove", "--force", str(cwd)])
+                    shutil.rmtree(cwd, ignore_errors=True)
+                except Exception:
+                    pass
 
         data["status"] = "ready-to-commit"
         data.pop("final_commit", None)
@@ -620,6 +664,34 @@ def _commit_message(data: dict[str, Any], target_app_path: str) -> str:
     return "\n".join(lines)
 
 
+def _record_commit_op(config: Config, branch: str, commit_sha: str, location: str, data: dict[str, Any]) -> None:
+    """将提交操作写入 operations 数据库，失败不影响主流程。"""
+    try:
+        ensure_schema(config.storage_db_path)
+        with connect(config.storage_db_path) as db:
+            db.execute(
+                "INSERT INTO operations"
+                "(id, kind, status, workspace_id, branch, issue_id, started_at, ended_at, summary)"
+                " VALUES (?, 'fix-commit', 'committed', ?, ?, ?, datetime('now'), datetime('now'), ?)",
+                (
+                    str(uuid.uuid4()),
+                    config.active_workspace or "",
+                    branch,
+                    data.get("issue_id", ""),
+                    json.dumps({
+                        "commit_sha": commit_sha,
+                        "location": location,
+                        "target_branch": data.get("target_branch", ""),
+                        "run_id": data.get("run_id", ""),
+                        "integration_branch": data.get("integration_branch", ""),
+                    }),
+                ),
+            )
+            db.commit()
+    except Exception:
+        pass  # 入库失败不阻断主流程
+
+
 def _remove_preview_artifacts(config: Config, target_repo: Path, worktree_path: Path, integration_branch: str) -> None:
     _ensure_child_path(worktree_path, (_worktree_root(config),))
     if worktree_path.exists():
@@ -646,12 +718,13 @@ def _worktree_changed_files(worktree_path: Path, target_app_path: str) -> list[s
     rc, out, _ = _git_rc(worktree_path, ["status", "--porcelain", "--", target_app_path])
     if rc != 0:
         return []
+    automation_prefixes = (".codex/", ".bugfix-automation-bin/")
     files: list[str] = []
     for line in out.splitlines():
         raw_path = line[3:]
         if " -> " in raw_path:
             raw_path = raw_path.split(" -> ", 1)[1]
-        if raw_path:
+        if raw_path and not raw_path.startswith(automation_prefixes):
             files.append(raw_path)
     return sorted(files)
 

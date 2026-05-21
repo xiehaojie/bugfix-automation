@@ -24,7 +24,7 @@ import {
   Zap
 } from "lucide-react";
 import Link from "next/link";
-import { Tooltip } from "antd";
+import { Select, Tooltip } from "antd";
 import { Badge } from "../src/components/ui/Badge";
 import { MultiSelectTags } from "../src/components/ui/MultiSelectTags";
 import { Panel } from "../src/components/ui/Panel";
@@ -61,7 +61,6 @@ export default function ApprovalPage() {
     config,
     deleteBug,
     excelFile,
-    excelPathInput,
     fixValidation,
     installSchedule,
     loading,
@@ -80,14 +79,12 @@ export default function ApprovalPage() {
     scheduler,
     schedulerHour,
     schedulerMinute,
-    selectExcelPath,
     selected,
     selectedWorkspace,
     setBranchSummaryFields,
     setCliTool,
     setCommitLocation,
     setExcelFile,
-    setExcelPathInput,
     setMaxConcurrency,
     setPromptContextPaths,
     setPromptFields,
@@ -172,14 +169,15 @@ export default function ApprovalPage() {
         <header className="commandBar">
           <div className="commandBarLeft">
             <FolderDot size={18} className="commandBarIcon" />
-            <select
+            <Select
               className="workspaceSelect"
-              value={config?.active_workspace ?? ""}
-              onChange={event => void switchWorkspace(event.target.value)}
+              value={config?.active_workspace ?? undefined}
+              onChange={value => void switchWorkspace(value)}
               disabled={busyAction === "switch-workspace"}
-            >
-              {(config?.workspaces ?? []).map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
-            </select>
+              variant="outlined"
+              popupMatchSelectWidth={false}
+              options={(config?.workspaces ?? []).map(workspace => ({ value: workspace.id, label: workspace.name }))}
+            />
             {selectedWorkspace?.scope ? <span className={`wsScopeBadge ${selectedWorkspace.scope}`}>{selectedWorkspace.scope === "frontend" ? "前端" : selectedWorkspace.scope === "backend" ? "后端" : "全栈"}</span> : null}
             <span className="commandBarPath">{config?.target_repo}/{config?.target_app_path}</span>
           </div>
@@ -215,19 +213,12 @@ export default function ApprovalPage() {
                       type="file"
                       accept=".xlsx"
                       onClick={event => { event.currentTarget.value = ""; }}
-                      onChange={event => setExcelFile(event.target.files?.[0] ?? null)}
+                      onChange={event => { const f = event.target.files?.[0]; if (f) { setExcelFile(f); void uploadExcel(f); } }}
                     />
-                    <label className="buttonSmall ghost" htmlFor="excelUploadInput"><CloudUpload size={13} />上传新文件</label>
-                    {excelFile ? (
-                      <button className="buttonSmall secondary" disabled={Boolean(busyAction)} onClick={() => void uploadExcel()}>
-                        {busyAction === "/api/excel/upload" ? <Loader2 size={13} className="spin" /> : <CloudUpload size={13} />}
-                        确认上传
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="configFileRow">
-                    <input className="configInput" value={excelPathInput} onChange={event => setExcelPathInput(event.target.value)} placeholder="或输入本机 .xlsx 路径" />
-                    <button className="buttonSmall ghost" disabled={Boolean(busyAction)} onClick={() => void selectExcelPath()}>使用此路径</button>
+                    <label className="buttonSmall ghost" htmlFor="excelUploadInput">
+                      {busyAction === "/api/excel/upload" ? <Loader2 size={13} className="spin" /> : <CloudUpload size={13} />}
+                      上传文件
+                    </label>
                   </div>
                 </div>
               </div>

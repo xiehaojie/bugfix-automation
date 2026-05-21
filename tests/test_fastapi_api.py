@@ -27,6 +27,8 @@ class FastApiApprovalTest(unittest.TestCase):
             schedule_minute=0,
             approval_web_port=8765,
             approval_api_port=8766,
+            data_root=root / "data",
+            storage_db_path=root / "data" / "app.sqlite3",
         )
 
     def test_logs_endpoint_returns_empty_payload_without_branch(self) -> None:
@@ -37,6 +39,52 @@ class FastApiApprovalTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"branch": "", "path": "", "content": ""})
+
+    def test_logs_stream_returns_snapshot_event(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.make_config(root)
+            log_path = config.logs_root / "codex" / "fix-1-demo.log"
+            log_path.parent.mkdir(parents=True)
+            log_path.write_text("hello\n", encoding="utf-8")
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+
+            response = client.get("/api/logs/stream", params={"branch": "fix/1-demo", "follow": "false"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.headers["content-type"].startswith("text/event-stream"))
+        self.assertIn('"type":"snapshot"', response.text)
+        self.assertIn('"branch":"fix/1-demo"', response.text)
+        self.assertIn("hello", response.text)
+
+    def test_logs_stream_allows_localhost_frontend_cors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.make_config(root)
+            log_path = config.logs_root / "codex" / "fix-1-demo.log"
+            log_path.parent.mkdir(parents=True)
+            log_path.write_text("hello\n", encoding="utf-8")
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+
+            response = client.get(
+                "/api/logs/stream",
+                params={"branch": "fix/1-demo", "follow": "false"},
+                headers={"Origin": "http://127.0.0.1:8765"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["access-control-allow-origin"], "http://127.0.0.1:8765")
+
+    def test_history_endpoint_returns_operations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            client = TestClient(create_app(self.make_config(Path(tmp))), raise_server_exceptions=False)
+
+            response = client.get("/api/history/operations")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("items", payload)
+        self.assertIsInstance(payload["items"], list)
 
     def test_config_endpoint_returns_current_config_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -44,6 +44,8 @@ class Config:
     schedule_minute: int
     approval_web_port: int
     approval_api_port: int
+    data_root: Path = Path("data")
+    storage_db_path: Path = Path("data/app.sqlite3")
     excel_processed_status_column: str = "对接人状态"
     excel_processed_status_value: str = "已处理"
     active_workspace: str = "pc-web"
@@ -73,6 +75,8 @@ def load_config(config_path: Path | None = None) -> Config:
     worktree_root = _path(value("worktree_root", "BUGFIX_WORKTREE_ROOT", repo_root / ".target-worktrees"), repo_root)
     runs_root = _path(value("runs_root", "BUGFIX_RUNS_ROOT", repo_root / "runs"), repo_root)
     logs_root = _path(value("logs_root", "BUGFIX_LOGS_ROOT", repo_root / "logs"), repo_root)
+    data_root = _path(value("data_root", "BUGFIX_DATA_ROOT", repo_root / "data"), repo_root)
+    storage_db_path = _path(value("storage_db_path", "BUGFIX_STORAGE_DB_PATH", data_root / "app.sqlite3"), repo_root)
     fallback_app_path = str(value("target_app_path", "BUGFIX_TARGET_APP_PATH", "apps/pc-web"))
     workspaces = _workspace_configs(yaml_values, repo_root, target_repo, fallback_app_path)
     active = _active_workspace(workspaces, active_workspace) if workspaces else None
@@ -89,6 +93,8 @@ def load_config(config_path: Path | None = None) -> Config:
         worktree_root=worktree_root,
         runs_root=runs_root,
         logs_root=logs_root,
+        data_root=data_root,
+        storage_db_path=storage_db_path,
         launchd_label=str(value("launchd_label", "BUGFIX_LAUNCHD_LABEL", "local.bugfix-automation.nightly")),
         cli_tool=str(value("cli_tool", "BUGFIX_CLI_TOOL", value("codex_bin", "BUGFIX_CODEX_BIN", "codex"))),
         schedule_hour=int(os.environ.get("BUGFIX_SCHEDULE_HOUR", schedule.get("hour", 22))),

@@ -10,6 +10,7 @@ from bugfix_automation.config import load_config, repo_root_path, update_config_
 from bugfix_automation.excel_reader import read_sheet
 from bugfix_automation.infra.file_metadata import file_metadata
 from bugfix_automation.infra.uploads import safe_upload_name, validate_uploaded_xlsx, validate_xlsx
+from bugfix_automation.storage.repositories import save_excel_import
 
 
 def upload_excel_from_multipart(body: bytes, content_type: str) -> dict[str, Any]:
@@ -31,6 +32,7 @@ def upload_excel_bytes(filename: str, file_bytes: bytes) -> dict[str, Any]:
     target.write_bytes(file_bytes)
     validate_uploaded_xlsx(target)
     update_config_yaml({"excel_path": target})
+    _record_excel_import(original_name, target)
     return {
         "ok": True,
         "excel_path": str(target),
@@ -44,7 +46,24 @@ def select_excel_path(raw_path: str) -> dict[str, Any]:
     path = Path(raw_path).expanduser().resolve()
     validate_xlsx(path)
     update_config_yaml({"excel_path": path})
+    _record_excel_import(path.name, path)
     return {"ok": True, "excel_path": str(path), "file": file_metadata(path)}
+
+
+def _record_excel_import(original_name: str, path: Path) -> None:
+    try:
+        config = load_config()
+        rows = read_sheet(path, config.sheet_name)
+        save_excel_import(
+            config.storage_db_path,
+            original_filename=original_name,
+            stored_path=path,
+            sheet_name=config.sheet_name,
+            rows=rows,
+            config_snapshot_id=None,
+        )
+    except Exception:
+        return
 
 
 def get_excel_columns(max_distinct: int = 50) -> dict[str, Any]:

@@ -9,6 +9,7 @@ from typing import Any
 
 from bugfix_automation.config import Config
 from bugfix_automation.filtering import BugRecord
+from bugfix_automation.storage.repositories import append_operation_event
 
 
 ACTIVE_STATUSES = {"queued", "running", "verifying", "reworking"}
@@ -56,6 +57,7 @@ def set_task_state(
     phase: str = "",
     pid: int | None = None,
     image_paths: list[Path] | None = None,
+    operation_id: str | None = None,
 ) -> dict[str, Any]:
     now = datetime.now().isoformat(timespec="seconds")
     with _LOCK:
@@ -84,8 +86,20 @@ def set_task_state(
             next_state["ended_at"] = now
         if image_paths is not None:
             next_state["images"] = [str(path) for path in image_paths]
+        if operation_id is not None:
+            next_state["operation_id"] = operation_id
         states[branch] = next_state
         _write_states(task_state_path(config), states)
+        stored_operation_id = str(next_state.get("operation_id") or "")
+        if stored_operation_id:
+            append_operation_event(
+                config.storage_db_path,
+                operation_id=stored_operation_id,
+                event_type="task_state",
+                status=status,
+                message=detail,
+                payload={"branch": branch, "phase": phase, "pid": next_state.get("pid")},
+            )
         return next_state
 
 

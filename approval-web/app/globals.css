@@ -345,22 +345,15 @@ button, input, select, textarea { font: inherit; }
 }
 
 .workspaceSelect {
-  height: 34px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-soft);
-  color: var(--text);
-  padding: 0 12px;
-  font-size: 14px;
+  min-width: 160px;
   font-weight: 600;
-  outline: none;
-  cursor: pointer;
-  transition: border-color var(--transition);
 }
 
-.workspaceSelect:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+.workspaceSelect .ant-select-selector {
+  border-radius: var(--radius-sm) !important;
+  background: var(--surface-soft) !important;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .commandBarPath {
@@ -3226,9 +3219,13 @@ body {
 }
 
 .workspaceSelect {
-  height: 32px;
-  border-radius: 7px;
-  background: #f8fafc;
+  min-width: 140px;
+}
+
+.workspaceSelect .ant-select-selector {
+  height: 32px !important;
+  border-radius: 7px !important;
+  background: #f8fafc !important;
   font-size: 13px;
 }
 

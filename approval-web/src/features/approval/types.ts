@@ -101,6 +101,9 @@ export type LogPayload = {
   branch: string;
   path: string;
   content: string;
+  offset?: number;
+  next_offset?: number;
+  size?: number;
 };
 
 export type TaskLike = {
