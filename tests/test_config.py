@@ -180,6 +180,32 @@ excel_profile:
         self.assertEqual(config.prompt_template, "profile template")
         self.assertEqual(config.branch_summary_fields, ("画像摘要",))
 
+    def test_load_config_respects_empty_excel_profile_prompt_values_from_yaml(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.yaml"
+            path.write_text(
+                """
+branch_summary_fields:
+  - 顶层摘要
+prompt:
+  fields:
+    - 顶层字段
+  template: top-level template
+excel_profile:
+  prompt:
+    fields: []
+    template: ""
+    branch_summary_fields: []
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+
+        self.assertEqual(config.prompt_fields, ())
+        self.assertEqual(config.prompt_template, "")
+        self.assertEqual(config.branch_summary_fields, ())
+
     def test_load_config_merges_sqlite_settings_over_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -278,6 +304,41 @@ prompt:
         self.assertEqual(config.prompt_fields, ("标题", "详情"))
         self.assertEqual(config.prompt_template, "adapter template")
         self.assertEqual(config.branch_summary_fields, ("标题",))
+
+    def test_load_config_respects_empty_excel_profile_prompt_values_from_sqlite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "app.sqlite3"
+            config_path.write_text(
+                f"""
+storage_db_path: {db_path}
+branch_summary_fields:
+  - yaml summary
+prompt:
+  fields:
+    - yaml field
+  template: yaml template
+""",
+                encoding="utf-8",
+            )
+            set_setting(
+                db_path,
+                "excel_profile",
+                {
+                    "prompt": {
+                        "fields": [],
+                        "template": "",
+                        "branch_summary_fields": [],
+                    }
+                },
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.prompt_fields, ())
+        self.assertEqual(config.prompt_template, "")
+        self.assertEqual(config.branch_summary_fields, ())
 
     def test_load_config_uses_yaml_when_sqlite_settings_cannot_be_read(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

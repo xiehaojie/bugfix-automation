@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import os
 import sqlite3
@@ -54,6 +54,9 @@ class ExcelProfile:
     prompt_fields: tuple[str, ...] = ()
     prompt_template: str = ""
     branch_summary_fields: tuple[str, ...] = ()
+    prompt_fields_provided: bool = field(default=False, repr=False)
+    prompt_template_provided: bool = field(default=False, repr=False)
+    branch_summary_fields_provided: bool = field(default=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -120,8 +123,10 @@ def load_config(config_path: Path | None = None) -> Config:
     if not isinstance(prompt, dict):
         prompt = {}
     excel_profile = _excel_profile(yaml_values.get("excel_profile"))
-    branch_summary_fields = excel_profile.branch_summary_fields or _string_tuple(
-        yaml_values.get("branch_summary_fields"), ("问题描述",)
+    branch_summary_fields = (
+        excel_profile.branch_summary_fields
+        if excel_profile.branch_summary_fields_provided
+        else _string_tuple(yaml_values.get("branch_summary_fields"), ("问题描述",))
     )
     global_max_concurrency = int(value("max_concurrency", "BUGFIX_MAX_CONCURRENCY", active.max_concurrency if active else 2))
     return Config(
@@ -147,8 +152,16 @@ def load_config(config_path: Path | None = None) -> Config:
         workspaces=workspaces,
         filters=filters,
         branch_summary_fields=branch_summary_fields,
-        prompt_fields=excel_profile.prompt_fields or _string_tuple(prompt.get("fields"), DEFAULT_PROMPT_FIELDS),
-        prompt_template=excel_profile.prompt_template or str(prompt.get("template", DEFAULT_PROMPT_TEMPLATE)),
+        prompt_fields=(
+            excel_profile.prompt_fields
+            if excel_profile.prompt_fields_provided
+            else _string_tuple(prompt.get("fields"), DEFAULT_PROMPT_FIELDS)
+        ),
+        prompt_template=(
+            excel_profile.prompt_template
+            if excel_profile.prompt_template_provided
+            else str(prompt.get("template", DEFAULT_PROMPT_TEMPLATE))
+        ),
         prompt_context_paths=(*_string_tuple(prompt.get("context_paths"), ()), *(active.prompt_context_paths if active else ())),
         max_concurrency=max(1, min(int(os.environ.get("BUGFIX_MAX_CONCURRENCY", global_max_concurrency)), 8)),
         validation_target_branches=_string_tuple(value("validation_target_branches", "BUGFIX_VALIDATION_TARGET_BRANCHES", ("main", "master", "develop"))),
@@ -269,6 +282,9 @@ def _excel_profile(value: Any) -> ExcelProfile:
         prompt_fields=_string_tuple(prompt.get("fields"), ()),
         prompt_template=str(prompt.get("template", "")) if prompt.get("template") is not None else "",
         branch_summary_fields=_string_tuple(prompt.get("branch_summary_fields"), ()),
+        prompt_fields_provided="fields" in prompt,
+        prompt_template_provided="template" in prompt,
+        branch_summary_fields_provided="branch_summary_fields" in prompt,
     )
 
 
