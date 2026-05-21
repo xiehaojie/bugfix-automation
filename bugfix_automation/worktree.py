@@ -133,16 +133,47 @@ def write_worktree_exclude(worktree_path: Path) -> None:
         return
     git_dir_str = content.removeprefix("gitdir:").strip()
     git_dir = Path(git_dir_str) if Path(git_dir_str).is_absolute() else (worktree_path / git_dir_str).resolve()
-    info_dir = git_dir / "info"
-    info_dir.mkdir(parents=True, exist_ok=True)
-    exclude_file = info_dir / "exclude"
+    exclude_files = [git_dir / "info" / "exclude"]
+    common_dir = _git_common_dir(worktree_path)
+    if common_dir is not None:
+        exclude_files.append(common_dir / "info" / "exclude")
+    for exclude_file in exclude_files:
+        _append_worktree_exclude_entries(exclude_file)
+
+
+def _git_common_dir(worktree_path: Path) -> Path | None:
+    result = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=worktree_path, text=True, capture_output=True)
+    if result.returncode != 0:
+        return None
+    raw = result.stdout.strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    return path if path.is_absolute() else (worktree_path / path).resolve()
+
+
+def _append_worktree_exclude_entries(exclude_file: Path) -> None:
+    exclude_file.parent.mkdir(parents=True, exist_ok=True)
     existing = exclude_file.read_text(encoding="utf-8") if exclude_file.exists() else ""
     entries = ""
     if ".bugfix-automation-bin" not in existing:
         entries += ".bugfix-automation-bin\n"
     if ".codex" not in existing:
         entries += ".codex\n"
-    for pattern in ("node_modules/", "*/node_modules/", "*/*/node_modules/", "apps/*/node_modules/", "packages/*/node_modules/", "libs/*/node_modules/"):
+    for pattern in (
+        "node_modules",
+        "node_modules/",
+        "*/node_modules",
+        "*/node_modules/",
+        "*/*/node_modules",
+        "*/*/node_modules/",
+        "apps/*/node_modules",
+        "apps/*/node_modules/",
+        "packages/*/node_modules",
+        "packages/*/node_modules/",
+        "libs/*/node_modules",
+        "libs/*/node_modules/",
+    ):
         if pattern not in existing and pattern not in entries:
             entries += f"{pattern}\n"
     if entries:

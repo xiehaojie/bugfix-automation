@@ -240,25 +240,37 @@ function CodexBlock({
 const EXEC_COLLAPSE_THRESHOLD = 15;
 const MAX_LINE_LENGTH = 500;
 const MAX_OUTPUT_LINES = 200;
+const NOISY_LINE_LENGTH = 1200;
+
+function isNoisyLongLine(line: string): boolean {
+  if (line.length <= NOISY_LINE_LENGTH) return false;
+  const sample = line.slice(0, 2000);
+  const whitespaceCount = (sample.match(/\s/g) ?? []).length;
+  if (whitespaceCount <= 2) return true;
+  const noisyChars = sample.replace(/[A-Za-z0-9+/=,;:_.$'"()[\]{}<>-]/g, "");
+  return noisyChars.length / sample.length < 0.08;
+}
+
+function sanitizeLogLine(line: string): string {
+  if (isNoisyLongLine(line)) {
+    return `[… 已省略 ${line.length.toLocaleString()} 字符的压缩/二进制日志 …]`;
+  }
+  return line.length > MAX_LINE_LENGTH ? `${line.slice(0, MAX_LINE_LENGTH)} …(截断)` : line;
+}
 
 /** 过滤/截断二进制垃圾行，保持日志可读 */
-function sanitizeExecOutput(output: string): string {
-  const lines = output.split("\n");
+function sanitizeLogText(text: string, maxLines = Number.POSITIVE_INFINITY): string {
+  const lines = text.split("\n");
   const result: string[] = [];
   let truncated = false;
   for (const line of lines) {
-    if (result.length >= MAX_OUTPUT_LINES) {
+    if (result.length >= maxLines) {
       truncated = true;
       break;
     }
-    // 跳过明显的二进制/base64 垃圾行（超长且无空格的连续字符）
-    if (line.length > MAX_LINE_LENGTH && !/\s/.test(line.slice(0, 200))) {
-      result.push("[... 二进制内容已省略 ...]");
-      continue;
-    }
-    result.push(line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + " …(截断)" : line);
+    result.push(sanitizeLogLine(line));
   }
-  if (truncated) result.push(`\n… 输出过长，仅显示前 ${MAX_OUTPUT_LINES} 行`);
+  if (truncated) result.push(`\n… 输出过长，仅显示前 ${maxLines} 行`);
   return result.join("\n");
 }
 
@@ -315,7 +327,7 @@ function ExecBlock({
         )}
       </div>
       {!collapsed && output && (
-        <pre className="vsc-log-exec-output">{sanitizeExecOutput(output)}</pre>
+        <pre className="vsc-log-exec-output">{sanitizeLogText(output, MAX_OUTPUT_LINES)}</pre>
       )}
     </div>
   );
@@ -339,7 +351,7 @@ export default function LogPane({
 
   const blocks = useMemo(() => {
     if (!content) return [];
-    return parseLogBlocks(content);
+    return parseLogBlocks(sanitizeLogText(content));
   }, [content]);
 
   if (!content) {

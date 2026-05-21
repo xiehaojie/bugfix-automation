@@ -11,7 +11,7 @@ from bugfix_automation.excel_writer import update_cell_by_header
 from bugfix_automation.runner import list_bugs
 from bugfix_automation.runner import assert_scope_clean, codex_command, codex_log_path, runtime_path_prefix
 from bugfix_automation.task_state import is_task_active, set_task_state, task_state
-from bugfix_automation.worktree import changed_paths, commit_all, create_no_push_git_wrapper, tracked_changed_files
+from bugfix_automation.worktree import changed_paths, commit_all, create_no_push_git_wrapper, symlink_node_modules, tracked_changed_files, write_worktree_exclude
 
 
 @dataclass(frozen=True)
@@ -166,6 +166,8 @@ def rework_fix(config: Config, branch: str, note: str = "", file_paths: list[str
     fix = _find_fix(config, branch)
     normalized_images = [Path(path).expanduser() for path in image_paths or [] if path.strip()]
     prompt = _rework_prompt(config, branch, note, file_paths or [], normalized_images)
+    write_worktree_exclude(fix.path)
+    symlink_node_modules(fix.path, config.target_repo)
     git_wrapper_dir = create_no_push_git_wrapper(fix.path)
     path_prefix = runtime_path_prefix(config.target_repo, git_wrapper_dir)
     set_task_state(config, branch, "reworking", detail="正在根据补充信息重新修改。", phase="codex", image_paths=normalized_images)

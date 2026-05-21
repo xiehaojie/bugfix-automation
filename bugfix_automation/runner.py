@@ -38,6 +38,7 @@ from bugfix_automation.worktree import (
     branch_exists,
     branch_worktree_path,
     worktree_path_for_branch,
+    symlink_node_modules,
     tracked_changed_files,
     write_worktree_exclude,
 )
@@ -168,6 +169,7 @@ def process_bug(
         with WORKTREE_LOCK:
             worktree_path = ensure_worktree(config.target_repo, config.worktree_root, branch)
         write_worktree_exclude(worktree_path)
+        symlink_node_modules(worktree_path, config.target_repo)
         install_project_agents(worktree_path, Path(__file__).resolve().parents[1])
         git_wrapper_dir = create_no_push_git_wrapper(worktree_path)
         path_prefix = runtime_path_prefix(config.target_repo, git_wrapper_dir)
