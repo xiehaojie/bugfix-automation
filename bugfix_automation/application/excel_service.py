@@ -6,11 +6,12 @@ from email.parser import BytesParser
 from pathlib import Path
 from typing import Any
 
-from bugfix_automation.config import load_config, repo_root_path, update_config_yaml
+from bugfix_automation.config import load_config, repo_root_path
 from bugfix_automation.excel_reader import read_sheet
 from bugfix_automation.infra.file_metadata import file_metadata
 from bugfix_automation.infra.uploads import safe_upload_name, validate_uploaded_xlsx, validate_xlsx
 from bugfix_automation.storage.repositories import save_excel_import
+from bugfix_automation.storage.settings import set_setting
 
 
 def upload_excel_from_multipart(body: bytes, content_type: str) -> dict[str, Any]:
@@ -31,7 +32,7 @@ def upload_excel_bytes(filename: str, file_bytes: bytes) -> dict[str, Any]:
     target = uploads_root / safe_upload_name(original_name)
     target.write_bytes(file_bytes)
     validate_uploaded_xlsx(target)
-    update_config_yaml({"excel_path": target})
+    _save_excel_setting(target)
     _record_excel_import(original_name, target)
     return {
         "ok": True,
@@ -45,9 +46,14 @@ def upload_excel_bytes(filename: str, file_bytes: bytes) -> dict[str, Any]:
 def select_excel_path(raw_path: str) -> dict[str, Any]:
     path = Path(raw_path).expanduser().resolve()
     validate_xlsx(path)
-    update_config_yaml({"excel_path": path})
+    _save_excel_setting(path)
     _record_excel_import(path.name, path)
     return {"ok": True, "excel_path": str(path), "file": file_metadata(path)}
+
+
+def _save_excel_setting(path: Path) -> None:
+    config = load_config()
+    set_setting(config.storage_db_path, "excel", {"excel_path": str(path), "sheet_name": config.sheet_name})
 
 
 def _record_excel_import(original_name: str, path: Path) -> None:

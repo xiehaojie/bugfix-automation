@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from bugfix_automation.config import Config, load_config, update_config_yaml
+from bugfix_automation.config import Config, WorkspaceConfig, load_config
 from bugfix_automation.infra.file_metadata import file_metadata
+from bugfix_automation.storage.settings import get_setting, set_setting
 
 
 def config_payload(config: Config) -> dict[str, Any]:
@@ -50,23 +51,28 @@ def config_payload(config: Config) -> dict[str, Any]:
 def select_workspace(config: Config, workspace_id: str) -> dict[str, Any]:
     if not any(workspace.id == workspace_id for workspace in config.workspaces):
         raise ValueError(f"未知工作区: {workspace_id}")
-    update_config_yaml({"active_workspace": workspace_id})
+    set_setting(config.storage_db_path, "active_workspace", workspace_id)
     return {"ok": True, "config": config_payload(load_config())}
 
 
 def update_automation_config(payload: dict[str, Any]) -> dict[str, Any]:
-    updates: dict[str, Any] = {}
+    config = load_config()
+    automation = get_setting(config.storage_db_path, "automation", {})
+    if not isinstance(automation, dict):
+        automation = {}
+    automation_updates: dict[str, Any] = {}
     if "max_concurrency" in payload:
-        updates["max_concurrency"] = int(payload["max_concurrency"])
+        automation_updates["max_concurrency"] = int(payload["max_concurrency"])
     if "branch_summary_fields" in payload:
-        updates["branch_summary_fields"] = payload["branch_summary_fields"]
+        set_setting(config.storage_db_path, "branch_summary_fields", payload["branch_summary_fields"])
     if "prompt" in payload and isinstance(payload["prompt"], dict):
-        updates["prompt"] = payload["prompt"]
+        set_setting(config.storage_db_path, "prompt", payload["prompt"])
     if "cli_tool" in payload:
-        updates["cli_tool"] = str(payload["cli_tool"]).strip()
+        automation_updates["cli_tool"] = str(payload["cli_tool"]).strip()
     if "codex_bin" in payload:
-        updates["cli_tool"] = str(payload["codex_bin"]).strip()
-    update_config_yaml(updates)
+        automation_updates["cli_tool"] = str(payload["codex_bin"]).strip()
+    if automation_updates:
+        set_setting(config.storage_db_path, "automation", {**automation, **automation_updates})
     return {"ok": True, "config": config_payload(load_config())}
 
 
@@ -87,7 +93,7 @@ def update_filters(filters: list[dict[str, Any]]) -> dict[str, Any]:
         elif single_value:
             d["value"] = single_value
         filter_dicts.append(d)
-    update_config_yaml({"filters": filter_dicts})
+    set_setting(load_config().storage_db_path, "filters", filter_dicts)
     return {"ok": True, "config": config_payload(load_config())}
 
 
@@ -136,22 +142,9 @@ def add_workspace(payload: dict[str, Any]) -> dict[str, Any]:
         "scope": scope,
     }
 
-    existing_workspaces = []
-    for ws in config.workspaces:
-        existing_workspaces.append({
-            "id": ws.id,
-            "name": ws.name,
-            "target_repo": str(ws.target_repo),
-            "repo_paths": [str(p) for p in ws.repo_paths],
-            "target_app_path": ws.target_app_path,
-            "scope_paths": ",".join(ws.scope_paths),
-            "verify_commands": ",".join(" ".join(cmd) for cmd in ws.verify_commands),
-            "prompt_context_paths": ",".join(ws.prompt_context_paths),
-            "max_concurrency": ws.max_concurrency,
-            "scope": ws.scope,
-        })
+    existing_workspaces = [_workspace_setting(ws) for ws in config.workspaces]
     existing_workspaces.append(new_workspace)
-    update_config_yaml({"workspaces": existing_workspaces})
+    set_setting(config.storage_db_path, "workspaces", existing_workspaces)
     new_config = load_config()
     return {"ok": True, "workspace_id": workspace_id, "config": config_payload(new_config)}
 
@@ -165,20 +158,24 @@ def remove_workspace(workspace_id: str) -> dict[str, Any]:
     for ws in config.workspaces:
         if ws.id == workspace_id:
             continue
-        remaining.append({
-            "id": ws.id,
-            "name": ws.name,
-            "target_repo": str(ws.target_repo),
-            "target_app_path": ws.target_app_path,
-            "scope_paths": ",".join(ws.scope_paths),
-            "verify_commands": ",".join(" ".join(cmd) for cmd in ws.verify_commands),
-            "prompt_context_paths": ",".join(ws.prompt_context_paths),
-            "max_concurrency": ws.max_concurrency,
-            "scope": ws.scope,
-        })
-    updates: dict[str, Any] = {"workspaces": remaining}
+        remaining.append(_workspace_setting(ws))
+    set_setting(config.storage_db_path, "workspaces", remaining)
     if config.active_workspace == workspace_id:
-        updates["active_workspace"] = remaining[0]["id"] if remaining else ""
-    update_config_yaml(updates)
+        set_setting(config.storage_db_path, "active_workspace", remaining[0]["id"] if remaining else "")
     new_config = load_config()
     return {"ok": True, "config": config_payload(new_config)}
+
+
+def _workspace_setting(workspace: WorkspaceConfig) -> dict[str, Any]:
+    return {
+        "id": workspace.id,
+        "name": workspace.name,
+        "target_repo": str(workspace.target_repo),
+        "repo_paths": [str(p) for p in workspace.repo_paths],
+        "target_app_path": workspace.target_app_path,
+        "scope_paths": ",".join(workspace.scope_paths),
+        "verify_commands": ",".join(" ".join(cmd) for cmd in workspace.verify_commands),
+        "prompt_context_paths": ",".join(workspace.prompt_context_paths),
+        "max_concurrency": workspace.max_concurrency,
+        "scope": workspace.scope,
+    }

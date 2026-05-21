@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from bugfix_automation.config import Config, load_config, update_config_yaml
+from bugfix_automation.config import Config, load_config
 from bugfix_automation.scheduler import install_launchd_at, launchd_status, start_manual_run, uninstall_launchd
+from bugfix_automation.storage.settings import get_setting, set_setting
 
 
 def status(config: Config) -> dict:
@@ -9,7 +10,10 @@ def status(config: Config) -> dict:
 
 
 def install(config: Config, hour: int, minute: int) -> dict:
-    update_config_yaml({"schedule": {"hour": hour, "minute": minute}})
+    automation = get_setting(config.storage_db_path, "automation", {})
+    if not isinstance(automation, dict):
+        automation = {}
+    set_setting(config.storage_db_path, "automation", {**automation, "schedule": {"hour": hour, "minute": minute}})
     next_config = load_config()
     path = install_launchd_at(next_config, hour, minute)
     return {"ok": True, "plist_path": str(path), "status": launchd_status(next_config)}

@@ -14,6 +14,7 @@ from bugfix_automation.application import fix_validation_service
 from bugfix_automation.approval import approve_fix, count_pending, parse_worktree_list, reject_fix
 from bugfix_automation.config import Config, WorkspaceConfig
 from bugfix_automation.filtering import filter_bugs
+from bugfix_automation.storage.settings import get_setting
 
 
 class ApprovalTest(unittest.TestCase):
@@ -352,14 +353,32 @@ branch refs/heads/feature/demo
             content_type = handler.headers["Content-Type"]
             content_length = int(handler.headers["Content-Length"])
             payload = handler.rfile.read(content_length)
+            config = Config(
+                excel_path=root / "config.xlsx",
+                sheet_name="SheetFromConfig",
+                assignee="谢浩杰",
+                target_repo=root / "repo",
+                target_app_path="apps/pc-web",
+                worktree_root=root / "worktrees",
+                runs_root=root / "runs",
+                logs_root=root / "logs",
+                data_root=root / "data",
+                storage_db_path=root / "data" / "app.sqlite3",
+                launchd_label="local.test",
+                cli_tool="codex",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+            )
             with unittest.mock.patch("bugfix_automation.application.excel_service.repo_root_path", return_value=root):
-                with unittest.mock.patch("bugfix_automation.application.excel_service.update_config_yaml") as update_yaml:
+                with unittest.mock.patch("bugfix_automation.application.excel_service.load_config", return_value=config):
                     result = upload_excel_from_multipart(payload, content_type)
 
-        self.assertTrue(result["ok"])
-        self.assertTrue(result["excel_path"].startswith(str(root / "uploads")))
-        self.assertEqual(result["filename"], "bug-list.xlsx")
-        update_yaml.assert_called_once()
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["excel_path"].startswith(str(root / "uploads")))
+            self.assertEqual(result["filename"], "bug-list.xlsx")
+            self.assertEqual(get_setting(config.storage_db_path, "excel"), {"excel_path": result["excel_path"], "sheet_name": "SheetFromConfig"})
 
 
 if __name__ == "__main__":

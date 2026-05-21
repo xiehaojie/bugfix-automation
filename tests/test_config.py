@@ -3,8 +3,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from bugfix_automation.config import load_config, repo_root_path, update_config_yaml
-from bugfix_automation.storage.settings import set_setting
+from bugfix_automation.application.config_service import update_automation_config, update_filters
+from bugfix_automation.application.scheduler_service import install
+from bugfix_automation.config import Config, load_config, repo_root_path, update_config_yaml
+from bugfix_automation.storage.settings import get_setting, set_setting
 
 
 class ConfigTest(unittest.TestCase):
@@ -256,6 +258,60 @@ prompt:
         self.assertEqual(config.max_concurrency, 4)
         self.assertEqual(config.prompt_fields, ("标题", "详情"))
         self.assertEqual(config.prompt_template, "db template")
+
+    def test_update_filters_writes_sqlite_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "app.sqlite3"
+            with patch.dict("os.environ", {"BUGFIX_STORAGE_DB_PATH": str(db_path)}):
+                update_filters([{"field": "负责人", "op": "equals", "value": "谢浩杰"}])
+            self.assertEqual(get_setting(db_path, "filters"), [{"field": "负责人", "op": "equals", "value": "谢浩杰"}])
+
+    def test_update_automation_config_writes_mutable_sqlite_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "app.sqlite3"
+            payload = {
+                "max_concurrency": 4,
+                "cli_tool": "codex",
+                "branch_summary_fields": ["问题描述"],
+                "prompt": {"fields": ["序号"], "template": "fix it", "context_paths": []},
+            }
+            with patch.dict("os.environ", {"BUGFIX_STORAGE_DB_PATH": str(db_path)}):
+                update_automation_config(payload)
+            self.assertEqual(get_setting(db_path, "automation"), {"cli_tool": "codex", "max_concurrency": 4})
+            self.assertEqual(get_setting(db_path, "branch_summary_fields"), ["问题描述"])
+            self.assertEqual(get_setting(db_path, "prompt"), {"fields": ["序号"], "template": "fix it", "context_paths": []})
+
+    def test_scheduler_install_merges_schedule_into_automation_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = root / "data" / "app.sqlite3"
+            config = Config(
+                excel_path=root / "bugs.xlsx",
+                sheet_name="Sheet1",
+                assignee="谢浩杰",
+                target_repo=root / "repo",
+                target_app_path="apps/pc-web",
+                worktree_root=root / "worktrees",
+                runs_root=root / "runs",
+                logs_root=root / "logs",
+                data_root=root / "data",
+                storage_db_path=db_path,
+                launchd_label="local.test",
+                cli_tool="codex",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+            )
+            set_setting(db_path, "automation", {"max_concurrency": 3, "cli_tool": "codex"})
+            with patch.dict("os.environ", {"BUGFIX_STORAGE_DB_PATH": str(db_path)}):
+                with patch("bugfix_automation.application.scheduler_service.install_launchd_at", return_value=root / "launchd.plist"):
+                    with patch("bugfix_automation.application.scheduler_service.launchd_status", return_value={}):
+                        install(config, 8, 45)
+            self.assertEqual(
+                get_setting(db_path, "automation"),
+                {"cli_tool": "codex", "max_concurrency": 3, "schedule": {"hour": 8, "minute": 45}},
+            )
 
     def test_load_config_reads_excel_profile_from_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
