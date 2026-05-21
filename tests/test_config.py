@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bugfix_automation.config import load_config, repo_root_path, update_config_yaml
+from bugfix_automation.storage.settings import set_setting
 
 
 class ConfigTest(unittest.TestCase):
@@ -136,6 +137,66 @@ prompt:
         self.assertEqual(config.prompt_fields, ("序号", "问题描述", "备注"))
         self.assertIn("apps/admin/src/pages", config.prompt_context_paths)
         self.assertEqual(config.branch_summary_fields, ("问题描述",))
+
+    def test_load_config_merges_sqlite_settings_over_yaml(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "app.sqlite3"
+            config_path.write_text(
+                f"""
+storage_db_path: {db_path}
+excel_path: /tmp/from-yaml.xlsx
+sheet_name: SheetFromYaml
+max_concurrency: 1
+prompt:
+  fields: 问题描述
+  template: yaml template
+""",
+                encoding="utf-8",
+            )
+            set_setting(db_path, "excel", {"excel_path": "/tmp/from-sqlite.xlsx", "sheet_name": "SheetFromDb"})
+            set_setting(db_path, "automation", {"max_concurrency": 4})
+            set_setting(
+                db_path,
+                "prompt",
+                {"fields": ["标题", "详情"], "template": "db template", "context_paths": []},
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.excel_path, Path("/tmp/from-sqlite.xlsx"))
+        self.assertEqual(config.sheet_name, "SheetFromDb")
+        self.assertEqual(config.max_concurrency, 4)
+        self.assertEqual(config.prompt_fields, ("标题", "详情"))
+        self.assertEqual(config.prompt_template, "db template")
+
+    def test_load_config_reads_excel_profile_from_sqlite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "app.sqlite3"
+            config_path.write_text(f"storage_db_path: {db_path}\n", encoding="utf-8")
+            set_setting(
+                db_path,
+                "excel_profile",
+                {
+                    "canonical_fields": {"issue_id": "编号", "description": "标题", "assignee": "负责人"},
+                    "prompt": {
+                        "fields": ["标题", "详情"],
+                        "template": "adapter template",
+                        "branch_summary_fields": ["标题"],
+                    },
+                },
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.excel_profile.canonical_fields.issue_id, "编号")
+        self.assertEqual(config.excel_profile.canonical_fields.description, "标题")
+        self.assertEqual(config.prompt_fields, ("标题", "详情"))
+        self.assertEqual(config.prompt_template, "adapter template")
+        self.assertEqual(config.branch_summary_fields, ("标题",))
 
 
 if __name__ == "__main__":

@@ -29,6 +29,32 @@ class WorkspaceConfig:
 
 
 @dataclass(frozen=True)
+class CanonicalFieldMapping:
+    issue_id: str = "序号"
+    source_system: str = "来源系统"
+    primary_category: str = "一级分类"
+    secondary_category: str = "二级分类"
+    priority: str = "优先级"
+    reporter: str = "提出人"
+    reported_at: str = "提出日期"
+    reporter_status: str = "提出人状态"
+    assignee: str = "对接人"
+    assignee_status: str = "对接人状态"
+    resolved_at: str = "解决日期"
+    description: str = "问题描述"
+    notes: str = "备注"
+    notes2: str = "备注2"
+
+
+@dataclass(frozen=True)
+class ExcelProfile:
+    canonical_fields: CanonicalFieldMapping = CanonicalFieldMapping()
+    prompt_fields: tuple[str, ...] = ()
+    prompt_template: str = ""
+    branch_summary_fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Config:
     excel_path: Path
     sheet_name: str
@@ -57,12 +83,19 @@ class Config:
     prompt_context_paths: tuple[str, ...] = ()
     max_concurrency: int = 2
     validation_target_branches: tuple[str, ...] = ("main", "master", "develop")
+    excel_profile: ExcelProfile = ExcelProfile()
 
 
 def load_config(config_path: Path | None = None) -> Config:
     repo_root = repo_root_path()
     yaml_path = config_path or default_config_path()
     yaml_values = _read_config_yaml(yaml_path)
+    bootstrap_data_root = _path(os.environ.get("BUGFIX_DATA_ROOT", yaml_values.get("data_root", repo_root / "data")), repo_root)
+    bootstrap_db_path = _path(
+        os.environ.get("BUGFIX_STORAGE_DB_PATH", yaml_values.get("storage_db_path", bootstrap_data_root / "app.sqlite3")),
+        repo_root,
+    )
+    yaml_values = _merge_runtime_settings(yaml_values, _read_sqlite_settings(bootstrap_db_path))
 
     def value(key: str, env_name: str, default: Any) -> Any:
         if env_name in os.environ:
@@ -82,7 +115,12 @@ def load_config(config_path: Path | None = None) -> Config:
     active = _active_workspace(workspaces, active_workspace) if workspaces else None
     filters = _filter_rules(yaml_values, str(value("assignee", "BUGFIX_ASSIGNEE", "谢浩杰")))
     prompt = yaml_values.get("prompt", {})
-    branch_summary_fields = _string_tuple(yaml_values.get("branch_summary_fields"), ("问题描述",))
+    if not isinstance(prompt, dict):
+        prompt = {}
+    excel_profile = _excel_profile(yaml_values.get("excel_profile"))
+    branch_summary_fields = _string_tuple(
+        yaml_values.get("branch_summary_fields"), excel_profile.branch_summary_fields or ("问题描述",)
+    )
     global_max_concurrency = int(value("max_concurrency", "BUGFIX_MAX_CONCURRENCY", active.max_concurrency if active else 2))
     return Config(
         excel_path=_path(value("excel_path", "BUGFIX_EXCEL_PATH", "/Users/xiehaojie/Desktop/亦城数智人在线清单.xlsx"), repo_root),
@@ -97,8 +135,8 @@ def load_config(config_path: Path | None = None) -> Config:
         storage_db_path=storage_db_path,
         launchd_label=str(value("launchd_label", "BUGFIX_LAUNCHD_LABEL", "local.bugfix-automation.nightly")),
         cli_tool=str(value("cli_tool", "BUGFIX_CLI_TOOL", value("codex_bin", "BUGFIX_CODEX_BIN", "codex"))),
-        schedule_hour=int(os.environ.get("BUGFIX_SCHEDULE_HOUR", schedule.get("hour", 22))),
-        schedule_minute=int(os.environ.get("BUGFIX_SCHEDULE_MINUTE", schedule.get("minute", 0))),
+        schedule_hour=int(value("schedule_hour", "BUGFIX_SCHEDULE_HOUR", schedule.get("hour", 22))),
+        schedule_minute=int(value("schedule_minute", "BUGFIX_SCHEDULE_MINUTE", schedule.get("minute", 0))),
         approval_web_port=int(value("approval_web_port", "BUGFIX_APPROVAL_WEB_PORT", 8765)),
         approval_api_port=int(value("approval_api_port", "BUGFIX_APPROVAL_API_PORT", 8766)),
         excel_processed_status_column=str(value("excel_processed_status_column", "BUGFIX_EXCEL_PROCESSED_STATUS_COLUMN", "对接人状态")),
@@ -107,11 +145,12 @@ def load_config(config_path: Path | None = None) -> Config:
         workspaces=workspaces,
         filters=filters,
         branch_summary_fields=branch_summary_fields,
-        prompt_fields=_string_tuple(prompt.get("fields"), DEFAULT_PROMPT_FIELDS),
-        prompt_template=str(prompt.get("template", DEFAULT_PROMPT_TEMPLATE)),
+        prompt_fields=_string_tuple(prompt.get("fields"), excel_profile.prompt_fields or DEFAULT_PROMPT_FIELDS),
+        prompt_template=str(prompt.get("template", excel_profile.prompt_template or DEFAULT_PROMPT_TEMPLATE)),
         prompt_context_paths=(*_string_tuple(prompt.get("context_paths"), ()), *(active.prompt_context_paths if active else ())),
         max_concurrency=max(1, min(int(os.environ.get("BUGFIX_MAX_CONCURRENCY", global_max_concurrency)), 8)),
         validation_target_branches=_string_tuple(value("validation_target_branches", "BUGFIX_VALIDATION_TARGET_BRANCHES", ("main", "master", "develop"))),
+        excel_profile=excel_profile,
     )
 
 
@@ -121,6 +160,100 @@ def repo_root_path() -> Path:
 
 def default_config_path() -> Path:
     return repo_root_path() / "config.yaml"
+
+
+def _read_sqlite_settings(db_path: Path) -> dict[str, Any]:
+    from bugfix_automation.storage.settings import get_settings
+
+    return get_settings(db_path)
+
+
+def _merge_runtime_settings(yaml_values: dict[str, Any], sqlite_settings: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(yaml_values)
+    if not sqlite_settings:
+        return merged
+
+    excel_settings = sqlite_settings.get("excel")
+    if isinstance(excel_settings, dict):
+        for key in ("excel_path", "sheet_name", "excel_processed_status_column", "excel_processed_status_value"):
+            if key in excel_settings:
+                merged[key] = excel_settings[key]
+
+    automation_settings = sqlite_settings.get("automation")
+    if isinstance(automation_settings, dict):
+        for key in (
+            "max_concurrency",
+            "launchd_label",
+            "cli_tool",
+            "codex_bin",
+            "schedule",
+            "schedule_hour",
+            "schedule_minute",
+            "approval_web_port",
+            "approval_api_port",
+            "validation_target_branches",
+        ):
+            if key in automation_settings:
+                merged[key] = automation_settings[key]
+
+    excel_profile_settings = sqlite_settings.get("excel_profile")
+    if isinstance(excel_profile_settings, dict):
+        merged["excel_profile"] = excel_profile_settings
+        profile_prompt = excel_profile_settings.get("prompt")
+        if isinstance(profile_prompt, dict):
+            merged["prompt"] = _merge_mapping(merged.get("prompt"), profile_prompt, ("fields", "template", "context_paths"))
+            if "branch_summary_fields" in profile_prompt:
+                merged["branch_summary_fields"] = profile_prompt["branch_summary_fields"]
+
+    if "workspaces" in sqlite_settings:
+        merged["workspaces"] = sqlite_settings["workspaces"]
+    if "filters" in sqlite_settings:
+        merged["filters"] = sqlite_settings["filters"]
+    if "active_workspace" in sqlite_settings:
+        merged["active_workspace"] = sqlite_settings["active_workspace"]
+
+    prompt_settings = sqlite_settings.get("prompt")
+    if isinstance(prompt_settings, dict):
+        merged["prompt"] = _merge_mapping(merged.get("prompt"), prompt_settings, ("fields", "template", "context_paths"))
+    if "branch_summary_fields" in sqlite_settings:
+        merged["branch_summary_fields"] = sqlite_settings["branch_summary_fields"]
+
+    return merged
+
+
+def _merge_mapping(base: Any, updates: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    merged = dict(base) if isinstance(base, dict) else {}
+    for key in keys:
+        if key in updates:
+            merged[key] = updates[key]
+    return merged
+
+
+def _excel_profile(value: Any) -> ExcelProfile:
+    if not isinstance(value, dict):
+        return ExcelProfile()
+
+    raw_canonical_fields = value.get("canonical_fields")
+    if not isinstance(raw_canonical_fields, dict):
+        raw_canonical_fields = {}
+    default_mapping = CanonicalFieldMapping()
+    canonical_kwargs: dict[str, str] = {}
+    for field_name in CanonicalFieldMapping.__dataclass_fields__:
+        default_value = getattr(default_mapping, field_name)
+        raw_value = raw_canonical_fields.get(field_name, default_value)
+        text = str(raw_value).strip() if raw_value is not None else ""
+        canonical_kwargs[field_name] = text or default_value
+
+    prompt = value.get("prompt")
+    if not isinstance(prompt, dict):
+        prompt = {}
+
+    return ExcelProfile(
+        canonical_fields=CanonicalFieldMapping(**canonical_kwargs),
+        prompt_fields=_string_tuple(prompt.get("fields"), ()),
+        prompt_template=str(prompt.get("template", "")) if prompt.get("template") is not None else "",
+        branch_summary_fields=_string_tuple(prompt.get("branch_summary_fields"), ()),
+    )
 
 
 def update_config_yaml(updates: dict[str, Any], config_path: Path | None = None) -> None:
