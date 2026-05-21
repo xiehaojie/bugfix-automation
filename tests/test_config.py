@@ -206,6 +206,24 @@ excel_profile:
         self.assertEqual(config.prompt_template, "")
         self.assertEqual(config.branch_summary_fields, ())
 
+    def test_load_config_respects_bare_empty_excel_profile_prompt_template_from_yaml(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.yaml"
+            path.write_text(
+                """
+prompt:
+  template: top-level
+excel_profile:
+  prompt:
+    template:
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+
+        self.assertEqual(config.prompt_template, "")
+
     def test_load_config_merges_sqlite_settings_over_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

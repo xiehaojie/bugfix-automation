@@ -276,11 +276,13 @@ def _excel_profile(value: Any) -> ExcelProfile:
     prompt = value.get("prompt")
     if not isinstance(prompt, dict):
         prompt = {}
+    raw_prompt_template = prompt.get("template", "")
+    prompt_template = "" if raw_prompt_template is None or raw_prompt_template == {} else str(raw_prompt_template)
 
     return ExcelProfile(
         canonical_fields=CanonicalFieldMapping(**canonical_kwargs),
         prompt_fields=_string_tuple(prompt.get("fields"), ()),
-        prompt_template=str(prompt.get("template", "")) if prompt.get("template") is not None else "",
+        prompt_template=prompt_template,
         branch_summary_fields=_string_tuple(prompt.get("branch_summary_fields"), ()),
         prompt_fields_provided="fields" in prompt,
         prompt_template_provided="template" in prompt,
