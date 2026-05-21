@@ -49,12 +49,29 @@ def test_save_excel_import_uses_canonical_mapping(tmp_path: Path):
         original_filename="bugs.xlsx",
         stored_path=excel_path,
         sheet_name="Sheet1",
-        rows=[{"_excel_row": "5", "编号": "A-5", "标题": "按钮错位", "负责人": "谢浩杰", "状态": "处理中"}],
+        rows=[
+            {
+                "_excel_row": "5",
+                "编号": "A-5",
+                "标题": "按钮错位",
+                "负责人": "谢浩杰",
+                "提出状态": "待处理",
+                "状态": "处理中",
+            }
+        ],
         config_snapshot_id=None,
-        mapping=CanonicalFieldMapping(issue_id="编号", description="标题", assignee="负责人", assignee_status="状态"),
+        mapping=CanonicalFieldMapping(
+            issue_id="编号",
+            description="标题",
+            assignee="负责人",
+            requester_status="提出状态",
+            assignee_status="状态",
+        ),
     )
 
     with sqlite3.connect(db_path) as db:
-        row = db.execute("SELECT issue_id, description, assignee, assignee_status FROM excel_import_rows").fetchone()
+        row = db.execute(
+            "SELECT issue_id, description, assignee, requester_status, assignee_status FROM excel_import_rows"
+        ).fetchone()
 
-    assert row == ("A-5", "按钮错位", "谢浩杰", "处理中")
+    assert row == ("A-5", "按钮错位", "谢浩杰", "待处理", "处理中")
