@@ -9,6 +9,7 @@ from bugfix_automation.storage.repositories import (
     list_operation_events,
     save_config_snapshot,
 )
+from bugfix_automation.storage.settings import get_setting, get_settings, set_setting
 
 
 def test_ensure_schema_creates_core_tables(tmp_path: Path):
@@ -119,3 +120,18 @@ def test_operation_can_be_finished_and_events_listed(tmp_path: Path):
     assert operation["ended_at"]
     assert operation["summary"] == "1 fix pending approval"
     assert events[0]["message"] == "queued"
+
+
+def test_app_settings_round_trip_json(tmp_path: Path) -> None:
+    db_path = tmp_path / "app.sqlite3"
+
+    set_setting(db_path, "prompt", {"fields": ["问题描述"], "template": "先修前端"})
+
+    assert get_setting(db_path, "prompt") == {"fields": ["问题描述"], "template": "先修前端"}
+    assert get_settings(db_path)["prompt"] == {"fields": ["问题描述"], "template": "先修前端"}
+
+
+def test_get_setting_returns_default_for_missing_key(tmp_path: Path) -> None:
+    db_path = tmp_path / "app.sqlite3"
+
+    assert get_setting(db_path, "missing", {"ok": True}) == {"ok": True}

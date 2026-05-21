@@ -13,6 +13,12 @@ CREATE TABLE IF NOT EXISTS config_snapshots (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS excel_import_batches (
   id TEXT PRIMARY KEY,
   original_filename TEXT NOT NULL,
