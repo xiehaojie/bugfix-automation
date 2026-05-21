@@ -2,7 +2,7 @@
 
 这是一个独立的本地自动化仓库，用来读取 Excel bug 清单，筛选分配给你的前端 bug，然后让 Codex 在每个 bug 独立的 git worktree 中尝试分析、修复、测试，并在早上提供一个 Next 审批工作台。
 
-默认工作区处理前端范围：`/Users/xiehaojie/code/monorepo/apps/pc-web`。也可以在 `config.yaml` 的 `workspaces` 中增加其他项目。
+默认工作区处理前端范围：`/Users/xiehaojie/code/monorepo/apps/pc-web`。也可以在审批台里增加其他项目工作区。
 
 它不会主动 push 到远端。
 
@@ -18,7 +18,13 @@ python3 -m pip install -r requirements.txt
 
 ## 配置入口
 
-优先改仓库根目录的 [config.yaml](/Users/xiehaojie/code/bugfix-automation/config.yaml)：
+仓库根目录的 [config.yaml](/Users/xiehaojie/code/bugfix-automation/config.yaml) 现在主要用于启动引导、兜底配置和本地首次运行。审批台里的 Excel 路径、筛选规则、提示词、工作区、定时任务、最高并发数、CLI 工具以及 AI Excel 适配配置，会保存到 SQLite 当前配置：
+
+```text
+data/app.sqlite3
+```
+
+首次启动或兜底配置示例：
 
 ```yaml
 excel_path: /Users/xiehaojie/Desktop/亦城数智人在线清单.xlsx
@@ -97,14 +103,14 @@ BUGFIX_CLI_TOOL=codex
 配置读取顺序是：
 
 ```text
-环境变量 > config.yaml > 代码默认值
+环境变量 > SQLite 当前配置 > config.yaml > 代码默认值
 ```
 
-`excel_path` 只是默认读取位置。更推荐在审批台里直接上传当天的 xlsx，上传后文件会保存到自动化仓库的 `uploads/` 目录，并自动把 `config.yaml` 的 `excel_path` 改成新文件。
+`excel_path` 只是首次启动或兜底读取位置。更推荐在审批台里直接上传当天的 xlsx，上传后文件会保存到自动化仓库的 `uploads/` 目录，并把新文件路径保存到 SQLite 当前配置。
 
 ## 筛选规则
 
-Excel 过滤现在由 `config.yaml` 的 `filters` 配置决定。默认规则是：
+Excel 过滤由 SQLite 当前配置里的 `filters` 决定；没有当前配置时，会回退到 `config.yaml` 的 `filters`。默认规则是：
 
 - `对接人` 等于配置的对接人，默认是 `谢浩杰`
 - `对接人状态` 不是 `已解决`，也不是配置里的已处理状态，默认 `已处理`
@@ -124,7 +130,7 @@ Excel 过滤现在由 `config.yaml` 的 `filters` 配置决定。默认规则是
 
 ## 工作区和提示词
 
-`workspaces` 用来切换不同项目。审批台顶部可以切换已有工作区；新增工作区时先编辑 `config.yaml`：
+`workspaces` 用来切换不同项目。审批台顶部可以切换已有工作区，也可以在页面里新增和保存工作区；首次启动或兜底时会读取 `config.yaml`：
 
 - `id`：工作区唯一标识
 - `name`：页面展示名
@@ -134,7 +140,7 @@ Excel 过滤现在由 `config.yaml` 的 `filters` 配置决定。默认规则是
 - `prompt_context_paths`：默认放进提示词的工程文件或目录
 - `max_concurrency`：该工作区建议并发数
 
-`prompt.fields` 控制哪些 Excel 字段进入 Codex 提示词；`prompt.template` 是初始化提示词；`prompt.context_paths` 可以补充工程内重点文件或目录。审批台右侧也可以直接调整这些配置。
+`prompt.fields` 控制哪些 Excel 字段进入 Codex 提示词；`prompt.template` 是初始化提示词；`prompt.context_paths` 可以补充工程内重点文件或目录。审批台右侧可以直接调整并保存这些配置。
 
 ## 并发执行
 
@@ -238,6 +244,7 @@ python3 -m bugfix_automation.cli install-launchd --hour 21 --minute 30
 - 前端按钮开启、取消、更新定时任务时间
 - 前端按钮立即手动执行一次完整自动化
 - 前端上传当天 Excel，并自动切换当前读取文件
+- AI 识别 Excel：读取表头和样例行，生成字段映射、提示词和筛选规则建议；确认保存后，后续运行使用确定性的配置执行
 - 顶部切换当前工作区
 - 右侧配置提示词字段、初始化提示词、工程上下文路径和最高并发数
 - 展示当前选中分支的 Codex 执行日志
@@ -259,7 +266,7 @@ Bug 文档面板里的“上传并切换”会把 xlsx 复制到：
 /Users/xiehaojie/code/bugfix-automation/uploads/
 ```
 
-然后更新 `config.yaml` 的 `excel_path`。之后审批台、手动执行和晚上定时执行都会读取这份上传后的文件。
+然后把文件路径保存到 SQLite 当前配置。之后审批台、手动执行和晚上定时执行都会读取这份上传后的文件。
 
 重新修改可以补充：
 
