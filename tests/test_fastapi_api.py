@@ -11,6 +11,7 @@ from bugfix_automation.api.app import create_app
 from bugfix_automation.config import Config
 from bugfix_automation.storage.db import connect
 from bugfix_automation.storage.repositories import create_ai_session, create_operation, finish_ai_session
+from bugfix_automation.storage.settings import get_setting
 
 
 class FastApiApprovalTest(unittest.TestCase):
@@ -263,6 +264,17 @@ class FastApiApprovalTest(unittest.TestCase):
         self.assertEqual(payload["target_app_path"], "apps/pc-web")
         self.assertEqual(payload["api_port"], 8766)
         self.assertEqual(payload["excel_file"], {})
+
+    def test_config_update_persists_cli_tool_setting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.make_config(root)
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+            with unittest.mock.patch.dict("os.environ", {"BUGFIX_STORAGE_DB_PATH": str(config.storage_db_path)}):
+                response = client.post("/api/config/update", json={"cli_tool": "/usr/local/bin/codex"})
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(get_setting(config.storage_db_path, "automation"), {"cli_tool": "/usr/local/bin/codex"})
 
     def test_image_endpoint_rejects_paths_outside_runs_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

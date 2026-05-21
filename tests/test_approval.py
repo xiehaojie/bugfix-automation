@@ -9,7 +9,7 @@ import shutil
 import subprocess
 
 from bugfix_automation.application.bug_service import bug_payload
-from bugfix_automation.application.excel_service import upload_excel_from_multipart
+from bugfix_automation.application.excel_service import select_excel_path, upload_excel_from_multipart
 from bugfix_automation.application import fix_validation_service
 from bugfix_automation.approval import approve_fix, count_pending, parse_worktree_list, reject_fix
 from bugfix_automation.config import Config, WorkspaceConfig
@@ -379,6 +379,37 @@ branch refs/heads/feature/demo
             self.assertTrue(result["excel_path"].startswith(str(root / "uploads")))
             self.assertEqual(result["filename"], "bug-list.xlsx")
             self.assertEqual(get_setting(config.storage_db_path, "excel"), {"excel_path": result["excel_path"], "sheet_name": "SheetFromConfig"})
+
+    def test_select_excel_path_writes_sqlite_excel_setting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workbook = root / "bugs.xlsx"
+            with zipfile.ZipFile(workbook, "w") as archive:
+                archive.writestr("[Content_Types].xml", "<Types></Types>")
+            config = Config(
+                excel_path=root / "config.xlsx",
+                sheet_name="SheetFromConfig",
+                assignee="谢浩杰",
+                target_repo=root / "repo",
+                target_app_path="apps/pc-web",
+                worktree_root=root / "worktrees",
+                runs_root=root / "runs",
+                logs_root=root / "logs",
+                data_root=root / "data",
+                storage_db_path=root / "data" / "app.sqlite3",
+                launchd_label="local.test",
+                cli_tool="codex",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+            )
+            with unittest.mock.patch("bugfix_automation.application.excel_service.load_config", return_value=config):
+                result = select_excel_path(str(workbook))
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["excel_path"], str(workbook.resolve()))
+            self.assertEqual(get_setting(config.storage_db_path, "excel"), {"excel_path": str(workbook.resolve()), "sheet_name": "SheetFromConfig"})
 
 
 if __name__ == "__main__":

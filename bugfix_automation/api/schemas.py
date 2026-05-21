@@ -20,6 +20,7 @@ class OptimizePromptRequest(BaseModel):
 
 class ConfigUpdateRequest(BaseModel):
     max_concurrency: int | None = None
+    cli_tool: str | None = None
     branch_summary_fields: list[str] | None = None
     prompt: dict[str, Any] | None = None
 
