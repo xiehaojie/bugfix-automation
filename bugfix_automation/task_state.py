@@ -9,7 +9,7 @@ from typing import Any
 
 from bugfix_automation.config import Config
 from bugfix_automation.filtering import BugRecord
-from bugfix_automation.storage.repositories import append_operation_event
+from bugfix_automation.storage.repositories import append_operation_event, update_operation_branch
 
 
 ACTIVE_STATUSES = {"queued", "running", "verifying", "reworking"}
@@ -111,6 +111,9 @@ def rename_task_state(config: Config, old_branch: str, new_branch: str) -> None:
             state["branch"] = new_branch
             states[new_branch] = state
             _write_states(task_state_path(config), states)
+            operation_id = str(state.get("operation_id") or "")
+            if operation_id:
+                update_operation_branch(config.storage_db_path, operation_id=operation_id, branch=new_branch)
 
 
 def _write_states(path: Path, states: dict[str, dict[str, Any]]) -> None:

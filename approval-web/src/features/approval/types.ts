@@ -177,6 +177,7 @@ export type HistoryOperation = {
   status: string;
   workspace_id: string;
   branch: string;
+  original_branch?: string;
   issue_id: string;
   excel_row?: number | null;
   started_at: string;
@@ -220,6 +221,7 @@ export type HistoryOperationsPayload = {
 export type HistoryDetailPayload = {
   operation: HistoryOperation;
   events: HistoryEvent[];
+  related_operations?: HistoryOperation[];
   ai_sessions: HistoryAiSession[];
   diff_preview: string;
   changed_files: string[];

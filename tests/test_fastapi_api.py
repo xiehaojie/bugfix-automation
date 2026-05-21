@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from bugfix_automation.api.app import create_app
 from bugfix_automation.config import Config
+from bugfix_automation.storage.db import connect
 from bugfix_automation.storage.repositories import create_ai_session, create_operation, finish_ai_session
 
 
@@ -137,6 +138,118 @@ class FastApiApprovalTest(unittest.TestCase):
         self.assertEqual(payload["changed_files"], ["apps/pc-web/a.tsx"])
         self.assertIn("修复输入框", payload["ai_sessions"][0]["prompt_preview"])
         self.assertIn("AI 修改了 a.tsx", payload["ai_sessions"][0]["log_preview"])
+
+    def test_history_detail_falls_back_to_commit_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.make_config(root)
+            repo = config.target_repo
+            app_file = repo / "apps" / "pc-web" / "src" / "a.tsx"
+            app_file.parent.mkdir(parents=True)
+            subprocess.run(["git", "init"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+            app_file.write_text("before\n", encoding="utf-8")
+            subprocess.run(["git", "add", "apps/pc-web/src/a.tsx"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            app_file.write_text("after\n", encoding="utf-8")
+            subprocess.run(["git", "add", "apps/pc-web/src/a.tsx"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", "fix"], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+            commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+            operation_id = create_operation(
+                config.storage_db_path,
+                kind="fix-commit",
+                workspace_id="pc-web",
+                status="committed",
+                branch="fix/1-demo",
+                summary=json.dumps({"title": "已提交此修复", "commit_sha": commit_sha}),
+            )
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+
+            response = client.get(f"/api/history/operations/{operation_id}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("+after", payload["diff_preview"])
+        self.assertEqual(payload["changed_files"], ["apps/pc-web/src/a.tsx"])
+
+    def test_history_groups_commit_back_to_run_record_by_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.make_config(root)
+            older_run_id = create_operation(
+                config.storage_db_path,
+                kind="run_one",
+                workspace_id="pc-web",
+                status="succeeded",
+                branch="fix/bug-28-App中无法通过键盘tab键一键输入-202605211409",
+                issue_id="28",
+                excel_row=156,
+                summary="已生成待审批改动",
+            )
+            latest_run_id = create_operation(
+                config.storage_db_path,
+                kind="run_one",
+                workspace_id="pc-web",
+                status="succeeded",
+                branch="fix/bug-28-App中无法通过键盘tab键一键输入-202605211424",
+                issue_id="28",
+                excel_row=156,
+                summary="已生成待审批改动",
+            )
+            commit_id = create_operation(
+                config.storage_db_path,
+                kind="fix-commit",
+                workspace_id="pc-web",
+                status="committed",
+                branch="fix/28-新增技能建议点击填入入口",
+                summary=json.dumps({"title": "已提交此修复", "commit_sha": "abc123"}),
+            )
+            with connect(config.storage_db_path) as db:
+                db.execute("UPDATE operations SET started_at = ?, ended_at = ? WHERE id = ?", ("2026-05-21T14:09:26", "2026-05-21T14:16:59", older_run_id))
+                db.execute("UPDATE operations SET started_at = ?, ended_at = ? WHERE id = ?", ("2026-05-21T14:24:07", "2026-05-21T14:33:41", latest_run_id))
+                db.execute("UPDATE operations SET started_at = ?, ended_at = ? WHERE id = ?", ("2026-05-21 06:37:23", "2026-05-21 06:37:23", commit_id))
+                db.commit()
+            config.runs_root.mkdir(parents=True)
+            (config.runs_root / "task-state.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": {
+                            "fix/28-新增技能建议点击填入入口": {
+                                "branch": "fix/28-新增技能建议点击填入入口",
+                                "issue_id": "28",
+                                "excel_row": 156,
+                                "operation_id": latest_run_id,
+                                "description": "在App中无法通过键盘tab键一键输入",
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+
+            response = client.get("/api/history/operations")
+            detail = client.get(f"/api/history/operations/{latest_run_id}")
+
+        self.assertEqual(response.status_code, 200)
+        items = response.json()["items"]
+        item = items[0]
+        self.assertEqual(item["id"], latest_run_id)
+        self.assertEqual(item["kind"], "fix-commit")
+        self.assertEqual(item["status"], "committed")
+        self.assertEqual(item["branch"], "fix/28-新增技能建议点击填入入口")
+        self.assertEqual(item["original_branch"], "fix/bug-28-App中无法通过键盘tab键一键输入-202605211424")
+        self.assertEqual(item["issue_id"], "28")
+        self.assertEqual(item["excel_row"], 156)
+        self.assertEqual(item["summary_text"], "已提交此修复")
+        self.assertEqual(items[1]["id"], older_run_id)
+        self.assertEqual(items[1]["kind"], "run_one")
+        self.assertEqual(response.json()["stats"]["submitted"], 1)
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["operation"]["kind"], "fix-commit")
+        self.assertEqual(len(detail.json()["related_operations"]), 2)
 
     def test_config_endpoint_returns_current_config_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

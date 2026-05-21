@@ -90,6 +90,13 @@ def finish_operation(db_path: Path, *, operation_id: str, status: str, summary: 
         db.commit()
 
 
+def update_operation_branch(db_path: Path, *, operation_id: str, branch: str) -> None:
+    ensure_schema(db_path)
+    with connect(db_path) as db:
+        db.execute("UPDATE operations SET branch = ? WHERE id = ?", (branch, operation_id))
+        db.commit()
+
+
 def append_operation_event(
     db_path: Path,
     *,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BotMessageSquare, CheckCircle2, Clock3, FileDiff, GitBranch, History, RefreshCcwDot, XCircle } from "lucide-react";
+import { BotMessageSquare, CheckCircle2, Clock3, FileDiff, History, RefreshCcwDot, XCircle } from "lucide-react";
 import { fetchJson } from "../api";
 import type { HistoryDetailPayload, HistoryOperation, HistoryOperationsPayload, HistoryStats } from "../types";
 import LogPane from "./LogPane";
@@ -36,11 +36,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 type HistoryFilter = "all" | "submitted" | "rejected" | "reworked" | "previewed" | "failed";
 
-type OperationHistoryPanelProps = {
-  onOpenBranch?: (branch: string) => void;
-};
-
-export function OperationHistoryPanel({ onOpenBranch }: OperationHistoryPanelProps) {
+export function OperationHistoryPanel() {
   const [payload, setPayload] = useState<HistoryOperationsPayload>({ items: [], stats: emptyStats() });
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<HistoryDetailPayload | null>(null);
@@ -168,12 +164,6 @@ export function OperationHistoryPanel({ onOpenBranch }: OperationHistoryPanelPro
                   <Meta label="开始" value={formatTime(selected.started_at)} />
                   <Meta label="结束" value={selected.ended_at ? formatTime(selected.ended_at) : "-"} />
                 </div>
-                {selected.branch ? (
-                  <button className="buttonSmall ghost" onClick={() => onOpenBranch?.(selected.branch)}>
-                    <GitBranch size={13} />
-                    查看当前分支
-                  </button>
-                ) : null}
               </div>
 
               {detailLoading ? <div className="historyEmpty compact">详情加载中...</div> : null}

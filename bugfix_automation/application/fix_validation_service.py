@@ -3,17 +3,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
-import uuid
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
 from bugfix_automation.config import Config, active_workspace_config
-from bugfix_automation.storage.db import connect, ensure_schema
 from bugfix_automation.storage.repositories import create_operation
+from bugfix_automation.task_state import task_state
 from bugfix_automation.worktree import branch_worktree_path, worktree_path_for_branch, write_worktree_exclude
 
 VALIDATION_RUNS_DIR = "fix-validations"
@@ -536,29 +536,33 @@ def _commit_message(data: dict[str, Any], target_app_path: str) -> str:
 def _record_commit_op(config: Config, branch: str, commit_sha: str, location: str, data: dict[str, Any]) -> None:
     """将提交操作写入 operations 数据库，失败不影响主流程。"""
     try:
-        ensure_schema(config.storage_db_path)
-        with connect(config.storage_db_path) as db:
-            db.execute(
-                "INSERT INTO operations"
-                "(id, kind, status, workspace_id, branch, issue_id, started_at, ended_at, summary)"
-                " VALUES (?, 'fix-commit', 'committed', ?, ?, ?, datetime('now'), datetime('now'), ?)",
-                (
-                    str(uuid.uuid4()),
-                    config.active_workspace or "",
-                    branch,
-                    data.get("issue_id", ""),
-                    json.dumps({
-                        "title": "已提交此修复",
-                        "commit_sha": commit_sha,
-                        "location": location,
-                        "target_branch": data.get("target_branch", ""),
-                        "run_id": data.get("run_id", ""),
-                        "integration_branch": data.get("integration_branch", ""),
-                        "changed_files": data.get("changed_files", []),
-                    }),
-                ),
-            )
-            db.commit()
+        state = task_state(config, branch)
+        issue_id = str(data.get("issue_id") or state.get("issue_id") or _issue_id_from_branch(branch))
+        excel_row = _optional_int(state.get("excel_row"))
+        source_operation_id = str(state.get("operation_id") or "")
+        create_operation(
+            config.storage_db_path,
+            kind="fix-commit",
+            workspace_id=config.active_workspace or "",
+            status="committed",
+            branch=branch,
+            issue_id=issue_id,
+            excel_row=excel_row,
+            summary=json.dumps(
+                {
+                    "title": "已提交此修复",
+                    "commit_sha": commit_sha,
+                    "location": location,
+                    "target_branch": data.get("target_branch", ""),
+                    "run_id": data.get("run_id", ""),
+                    "integration_branch": data.get("integration_branch", ""),
+                    "changed_files": data.get("changed_files", []),
+                    "source_operation_id": source_operation_id,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        )
     except Exception:
         pass  # 入库失败不阻断主流程
 
@@ -571,7 +575,7 @@ def _record_validation_op(config: Config, kind: str, status: str, branch: str, d
             workspace_id=config.active_workspace or "",
             status=status,
             branch=branch,
-            issue_id=str(data.get("issue_id") or ""),
+            issue_id=str(data.get("issue_id") or _issue_id_from_branch(branch)),
             summary=json.dumps(
                 {
                     "title": _validation_op_title(kind, status),
@@ -602,6 +606,18 @@ def _validation_op_title(kind: str, status: str) -> str:
         "fix-cleanup-source": "已清理来源分支",
     }
     return titles.get(kind, kind)
+
+
+def _issue_id_from_branch(branch: str) -> str:
+    match = re.match(r"^fix/(?:bug-)?(\d+)(?:-|$)", branch)
+    return match.group(1) if match else ""
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _remove_preview_artifacts(config: Config, target_repo: Path, worktree_path: Path, integration_branch: str) -> None:

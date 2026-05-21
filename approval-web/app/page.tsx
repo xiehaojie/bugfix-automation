@@ -395,12 +395,7 @@ export default function ApprovalPage() {
                   ))}</div>
             )}
             {mainTab === "history" && (
-              <OperationHistoryPanel
-                onOpenBranch={(branch) => {
-                  setSelectedBranch(branch);
-                  setMainTab("done");
-                }}
-              />
+              <OperationHistoryPanel />
             )}
           </div>
         </section>
