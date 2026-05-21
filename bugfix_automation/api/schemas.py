@@ -40,6 +40,10 @@ class ExcelPathRequest(BaseModel):
     path: str = ""
 
 
+class ExcelAdapterSaveRequest(BaseModel):
+    adapter: dict[str, Any] = {}
+
+
 class ReworkRequest(BaseModel):
     branch: str = ""
     note: str = ""

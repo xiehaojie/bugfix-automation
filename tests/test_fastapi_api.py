@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import unittest.mock
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -12,6 +13,7 @@ from bugfix_automation.config import Config
 from bugfix_automation.storage.db import connect
 from bugfix_automation.storage.repositories import create_ai_session, create_operation, finish_ai_session
 from bugfix_automation.storage.settings import get_setting
+from tests.test_excel_reader import write_minimal_xlsx
 
 
 class FastApiApprovalTest(unittest.TestCase):
@@ -297,6 +299,66 @@ class FastApiApprovalTest(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertFalse(response.json()["ok"])
         self.assertIn("ValueError:", response.json()["error"])
+
+    def test_excel_adapter_analyze_endpoint_returns_cleaned_suggestion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = replace(self.make_config(root), sheet_name="在线问题清单")
+            write_minimal_xlsx(config.excel_path)
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+            proc = unittest.mock.Mock()
+            proc.returncode = 0
+            proc.communicate = unittest.mock.AsyncMock(
+                return_value=(
+                    json.dumps(
+                        {
+                            "canonical_fields": {"issue_id": "序号", "description": "问题描述"},
+                            "prompt": {"fields": ["问题描述"], "template": "专用模板"},
+                            "branch_summary_fields": ["问题描述"],
+                            "filters": [],
+                            "warnings": [],
+                        },
+                        ensure_ascii=False,
+                    ).encode(),
+                    b"",
+                )
+            )
+            with unittest.mock.patch(
+                "bugfix_automation.application.excel_adapter_service.asyncio.create_subprocess_exec",
+                new=unittest.mock.AsyncMock(return_value=proc),
+            ):
+                response = client.post("/api/excel/adapter/analyze")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["adapter"]["canonical_fields"]["description"], "问题描述")
+
+    def test_excel_adapter_save_endpoint_persists_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = replace(self.make_config(root), sheet_name="在线问题清单")
+            write_minimal_xlsx(config.excel_path)
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+
+            response = client.post(
+                "/api/excel/adapter/save",
+                json={
+                    "adapter": {
+                        "canonical_fields": {"issue_id": "序号", "description": "问题描述"},
+                        "prompt": {"fields": ["问题描述"], "template": "专用模板"},
+                        "branch_summary_fields": ["问题描述"],
+                        "filters": [{"field": "提出人状态", "op": "not_in", "values": ["已解决"]}],
+                    }
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json()["ok"])
+            self.assertEqual(
+                get_setting(config.storage_db_path, "excel_profile")["canonical_fields"],
+                {"issue_id": "序号", "description": "问题描述"},
+            )
 
     def test_file_content_resolves_worktree_for_slash_branch_name(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
