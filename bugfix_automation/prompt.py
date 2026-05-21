@@ -25,8 +25,8 @@ def render_codex_prompt(
     image_paths: list[Path] | None = None,
     scope: str = "frontend",
 ) -> str:
-    selected_fields = prompt_fields or tuple(key for key in bug.raw if key != "_excel_row")
-    selected_lines = "\n".join(f"- {field}: {_field_value(bug, field)}" for field in selected_fields)
+    selected_fields = tuple(key for key in bug.raw if key != "_excel_row") if prompt_fields is None else prompt_fields
+    selected_lines = "\n".join(f"- {field}: {_field_value(bug, field)}" for field in selected_fields) or "- 无"
     raw_lines = "\n".join(
         f"- {field}: {value}"
         for field, value in bug.raw.items()

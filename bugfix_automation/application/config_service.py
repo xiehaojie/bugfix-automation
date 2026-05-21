@@ -67,6 +67,8 @@ def update_automation_config(payload: dict[str, Any]) -> dict[str, Any]:
         set_setting(config.storage_db_path, "branch_summary_fields", payload["branch_summary_fields"])
     if "prompt" in payload and isinstance(payload["prompt"], dict):
         set_setting(config.storage_db_path, "prompt", payload["prompt"])
+    if "prompt" in payload or "branch_summary_fields" in payload:
+        _sync_excel_profile_prompt(config.storage_db_path, payload)
     if "cli_tool" in payload:
         automation_updates["cli_tool"] = str(payload["cli_tool"]).strip()
     if "codex_bin" in payload:
@@ -74,6 +76,26 @@ def update_automation_config(payload: dict[str, Any]) -> dict[str, Any]:
     if automation_updates:
         set_setting(config.storage_db_path, "automation", {**automation, **automation_updates})
     return {"ok": True, "config": config_payload(load_config())}
+
+
+def _sync_excel_profile_prompt(db_path: Path, payload: dict[str, Any]) -> None:
+    profile = get_setting(db_path, "excel_profile")
+    if not isinstance(profile, dict):
+        return
+
+    prompt = profile.get("prompt")
+    if not isinstance(prompt, dict):
+        prompt = {}
+    else:
+        prompt = dict(prompt)
+
+    payload_prompt = payload.get("prompt")
+    if isinstance(payload_prompt, dict):
+        prompt.update(payload_prompt)
+    if "branch_summary_fields" in payload:
+        prompt["branch_summary_fields"] = payload["branch_summary_fields"]
+
+    set_setting(db_path, "excel_profile", {**profile, "prompt": prompt})
 
 
 def update_filters(filters: list[dict[str, Any]]) -> dict[str, Any]:

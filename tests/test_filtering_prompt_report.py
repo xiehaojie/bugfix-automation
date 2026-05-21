@@ -95,6 +95,33 @@ class FilteringPromptReportTest(unittest.TestCase):
 
         self.assertEqual(make_branch_name(bug, ("一级分类", "问题描述"), "202605120930"), "fix/bug-1-个人空间上传反馈不明显-202605120930")
 
+    def test_make_branch_name_honors_empty_summary_fields(self) -> None:
+        rows = [{
+            "_excel_row": "46",
+            "编号": "BUG-1",
+            "提出人状态": "待处理",
+            "来源系统": "小亦PC",
+            "负责人": "谢浩杰",
+            "状态": "处理中",
+            "问题描述": "旧配置字段不该使用",
+            "标题": "上传反馈不明显",
+            "详情": "点击后没有进度",
+        }]
+        bug = filter_bugs(
+            rows,
+            assignee="",
+            rules=(FilterRule("负责人", "equals", "谢浩杰", ("谢浩杰",)),),
+            mapping=CanonicalFieldMapping(
+                issue_id="编号",
+                description="标题",
+                remark="详情",
+                assignee="负责人",
+                assignee_status="状态",
+            ),
+        )[0]
+
+        self.assertEqual(make_branch_name(bug, (), "202605120930"), "fix/bug-BUG-1-上传反馈不明显-202605120930")
+
     def test_prompt_restricts_scope_and_remote_behavior(self) -> None:
         bug = filter_bugs([
             {
@@ -158,6 +185,27 @@ class FilteringPromptReportTest(unittest.TestCase):
         selected_section = prompt.split("原始 Excel 行完整信息：", 1)[0]
 
         self.assertIn("问题描述: 账号离线状态", selected_section)
+        self.assertNotIn("备注: 页面反馈不明显", selected_section)
+
+    def test_prompt_honors_empty_selected_excel_fields(self) -> None:
+        bug = filter_bugs([
+            {
+                "_excel_row": "2",
+                "序号": "87",
+                "提出人状态": "处理中",
+                "来源系统": "小亦PC",
+                "对接人": "谢浩杰",
+                "对接人状态": "",
+                "问题描述": "账号离线状态",
+                "备注": "页面反馈不明显",
+            }
+        ], assignee="谢浩杰")[0]
+
+        prompt = render_codex_prompt(bug, target_app_path="apps/pc-web", prompt_fields=())
+        selected_section = prompt.split("原始 Excel 行完整信息：", 1)[0]
+
+        self.assertIn("- 无", selected_section)
+        self.assertNotIn("问题描述: 账号离线状态", selected_section)
         self.assertNotIn("备注: 页面反馈不明显", selected_section)
 
     def test_prompt_uses_formatted_known_field_values(self) -> None:

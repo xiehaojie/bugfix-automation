@@ -281,6 +281,48 @@ prompt:
             self.assertEqual(get_setting(db_path, "branch_summary_fields"), ["问题描述"])
             self.assertEqual(get_setting(db_path, "prompt"), {"fields": ["序号"], "template": "fix it", "context_paths": []})
 
+    def test_update_automation_config_syncs_manual_prompt_to_excel_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "app.sqlite3"
+            set_setting(
+                db_path,
+                "excel_profile",
+                {
+                    "canonical_fields": {"issue_id": "编号", "description": "标题"},
+                    "prompt": {
+                        "fields": ["旧字段"],
+                        "template": "old template",
+                        "branch_summary_fields": ["旧摘要"],
+                    },
+                },
+            )
+
+            with patch.dict("os.environ", {"BUGFIX_STORAGE_DB_PATH": str(db_path)}):
+                update_automation_config(
+                    {
+                        "branch_summary_fields": ["新摘要"],
+                        "prompt": {"fields": ["新字段"], "template": "new template", "context_paths": ["apps/demo"]},
+                    }
+                )
+                config = load_config()
+
+            profile = get_setting(db_path, "excel_profile")
+            self.assertEqual(config.prompt_fields, ("新字段",))
+            self.assertEqual(config.prompt_template, "new template")
+            self.assertEqual(config.branch_summary_fields, ("新摘要",))
+            self.assertEqual(profile["canonical_fields"], {"issue_id": "编号", "description": "标题"})
+            self.assertEqual(
+                profile["prompt"],
+                {
+                    "fields": ["新字段"],
+                    "template": "new template",
+                    "context_paths": ["apps/demo"],
+                    "branch_summary_fields": ["新摘要"],
+                },
+            )
+            self.assertEqual(get_setting(db_path, "prompt"), {"fields": ["新字段"], "template": "new template", "context_paths": ["apps/demo"]})
+            self.assertEqual(get_setting(db_path, "branch_summary_fields"), ["新摘要"])
+
     def test_scheduler_install_merges_schedule_into_automation_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

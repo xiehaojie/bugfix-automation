@@ -113,7 +113,7 @@ def make_branch_name(
     summary_fields: tuple[str, ...] | None = None,
     timestamp: str | datetime | None = None,
 ) -> str:
-    summary = _summary_from_fields(bug, summary_fields or ("问题描述",))
+    summary = _summary_from_fields(bug, ("问题描述",) if summary_fields is None else summary_fields)
     stamp = _format_branch_stamp(timestamp or datetime.now())
     return f"fix/bug-{bug.issue_id}-{summary}-{stamp}"
 
