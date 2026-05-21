@@ -61,6 +61,26 @@ export type FilterRule = {
   values: string[];
 };
 
+export type ExcelProfile = {
+  canonical_fields: Record<string, string>;
+  prompt: {
+    fields: string[];
+    template: string;
+    branch_summary_fields: string[];
+  };
+};
+
+export type ExcelAdapterSuggestion = {
+  canonical_fields: Record<string, string>;
+  prompt: {
+    fields: string[];
+    template: string;
+  };
+  branch_summary_fields: string[];
+  filters: FilterRule[];
+  warnings: string[];
+};
+
 export type ConfigPayload = {
   target_repo: string;
   target_app_path: string;
@@ -76,6 +96,7 @@ export type ConfigPayload = {
   assignee: string;
   api_port: number;
   active_workspace: string;
+  excel_profile: ExcelProfile;
   max_concurrency: number;
   cli_tool: string;
   workspaces: Workspace[];

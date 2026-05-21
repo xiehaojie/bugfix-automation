@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchJson } from "../api";
-import type { BugItem, CommitLocation, ConfigPayload, DashboardPayload, FixValidation, LogPayload, SchedulerPayload } from "../types";
+import type { BugItem, CommitLocation, ConfigPayload, DashboardPayload, ExcelAdapterSuggestion, FixValidation, LogPayload, SchedulerPayload } from "../types";
 import { formatBytes } from "../../../lib/format";
 import { splitLines } from "../../../lib/splitLines";
 import { useAutoRefresh } from "./useAutoRefresh";
@@ -28,6 +28,7 @@ export function useApprovalDashboard() {
   const [branchSummaryFields, setBranchSummaryFields] = useState("");
   const [cliTool, setCliTool] = useState("codex");
   const [fixValidation, setFixValidation] = useState<FixValidation | null>(null);
+  const [excelAdapter, setExcelAdapter] = useState<ExcelAdapterSuggestion | null>(null);
   const [commitLocation, setCommitLocation] = useState<CommitLocation>("integration");
   const selectedBranchRef = useRef("");
 
@@ -228,6 +229,46 @@ export function useApprovalDashboard() {
     await postAction("/api/excel/select-path", { path: excelPathInput.trim() }, "已切换到本机 Excel 路径");
   };
 
+  const analyzeExcelAdapter = async () => {
+    setBusyAction("/api/excel/adapter/analyze");
+    setToast("");
+    try {
+      const data = await fetchJson<{ ok?: boolean; adapter?: ExcelAdapterSuggestion }>("/api/excel/adapter/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (!data.adapter) {
+        throw new Error("未返回 Excel 适配建议");
+      }
+      setExcelAdapter(data.adapter);
+      setToast("已生成 Excel 适配建议");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "分析失败");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const saveExcelAdapter = async (adapter: ExcelAdapterSuggestion) => {
+    setBusyAction("/api/excel/adapter/save");
+    setToast("");
+    try {
+      const data = await fetchJson<{ ok?: boolean }>("/api/excel/adapter/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adapter })
+      });
+      if (data.ok === false) throw new Error("保存失败");
+      setExcelAdapter(null);
+      setToast("Excel 适配已保存");
+      await refresh();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   const runBug = async (bug: BugItem) => {
     setBusyAction(`run-${bug.excel_row}`);
     setToast("");
@@ -312,8 +353,10 @@ export function useApprovalDashboard() {
     cliTool,
     config,
     commitLocation,
+    analyzeExcelAdapter,
     deleteBug,
     excelFile,
+    excelAdapter,
     excelPathInput,
     fixValidation,
     installSchedule,
@@ -329,6 +372,7 @@ export function useApprovalDashboard() {
     refresh,
     runBug,
     saveAutomationConfig,
+    saveExcelAdapter,
     switchWorkspace,
     scheduler,
     schedulerHour,
@@ -339,6 +383,7 @@ export function useApprovalDashboard() {
     setBranchSummaryFields,
     setCliTool,
     setCommitLocation,
+    setExcelAdapter,
     setExcelFile,
     setExcelPathInput,
     setMaxConcurrency,

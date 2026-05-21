@@ -31,6 +31,7 @@ import { AiChatPanel } from "../src/features/approval/components/AiChatPanel";
 import { BranchButton } from "../src/features/approval/components/BranchButton";
 import { BugTable } from "../src/features/approval/components/BugTable";
 import { DiffView } from "../src/features/approval/components/DiffView";
+import { ExcelAdapterPanel } from "../src/features/approval/components/ExcelAdapterPanel";
 import { FilterRulesEditor } from "../src/features/approval/components/FilterRulesEditor";
 import { FixValidationCard } from "../src/features/approval/components/FixValidationCard";
 import { OperationHistoryPanel } from "../src/features/approval/components/OperationHistoryPanel";
@@ -53,6 +54,7 @@ const OP_LABELS: Record<string, string> = {
 export default function ApprovalPage() {
   const {
     actionDisabled,
+    analyzeExcelAdapter,
     branchSummaryFields,
     bugs,
     busyAction,
@@ -60,6 +62,7 @@ export default function ApprovalPage() {
     commitLocation,
     config,
     deleteBug,
+    excelAdapter,
     excelFile,
     fixValidation,
     installSchedule,
@@ -75,6 +78,7 @@ export default function ApprovalPage() {
     refresh,
     runBug,
     saveAutomationConfig,
+    saveExcelAdapter,
     switchWorkspace,
     scheduler,
     schedulerHour,
@@ -84,6 +88,7 @@ export default function ApprovalPage() {
     setBranchSummaryFields,
     setCliTool,
     setCommitLocation,
+    setExcelAdapter,
     setExcelFile,
     setMaxConcurrency,
     setPromptContextPaths,
@@ -286,6 +291,13 @@ export default function ApprovalPage() {
             <div className="configSection">
               <h4 className="configSectionTitle"><BotMessageSquare size={14} />AI 提示词</h4>
               <div className="configSectionBody">
+                <ExcelAdapterPanel
+                  adapter={excelAdapter}
+                  busyAction={busyAction}
+                  onAnalyze={analyzeExcelAdapter}
+                  onSave={saveExcelAdapter}
+                  onClear={() => setExcelAdapter(null)}
+                />
                 <div className="configFieldRow">
                   <div className="configField">
                     <label className="configLabel">传给 AI 的 Excel 列</label>
