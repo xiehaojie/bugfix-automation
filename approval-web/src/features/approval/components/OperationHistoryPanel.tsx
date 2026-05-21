@@ -20,6 +20,22 @@ const KIND_LABELS: Record<string, string> = {
   "fix-cleanup-source": "清理来源",
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  running: "执行中",
+  succeeded: "成功",
+  failed: "失败",
+  rejected: "已拒绝",
+  committed: "已提交",
+  "ready-to-commit": "待提交",
+  "pending-approval": "待审批",
+  "preview-removed": "预演已移除",
+  cleaned: "已清理",
+  reverted: "已撤回",
+  conflict: "冲突",
+};
+
+type HistoryFilter = "all" | "submitted" | "rejected" | "reworked" | "previewed" | "failed";
+
 type OperationHistoryPanelProps = {
   onOpenBranch?: (branch: string) => void;
 };
@@ -31,10 +47,16 @@ export function OperationHistoryPanel({ onOpenBranch }: OperationHistoryPanelPro
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
+  const [activeFilter, setActiveFilter] = useState<HistoryFilter>("all");
+
+  const filteredItems = useMemo(
+    () => payload.items.filter(item => matchesFilter(item, activeFilter)),
+    [payload.items, activeFilter],
+  );
 
   const selected = useMemo(
-    () => payload.items.find(item => item.id === selectedId) ?? payload.items[0] ?? null,
-    [payload.items, selectedId],
+    () => filteredItems.find(item => item.id === selectedId) ?? filteredItems[0] ?? null,
+    [filteredItems, selectedId],
   );
 
   const refresh = useCallback(async () => {
@@ -43,13 +65,14 @@ export function OperationHistoryPanel({ onOpenBranch }: OperationHistoryPanelPro
     try {
       const next = await fetchJson<HistoryOperationsPayload>("/api/history/operations?limit=200");
       setPayload(next);
-      setSelectedId(current => current && next.items.some(item => item.id === current) ? current : next.items[0]?.id ?? "");
+      const nextVisible = next.items.filter(item => matchesFilter(item, activeFilter));
+      setSelectedId(current => current && nextVisible.some(item => item.id === current) ? current : nextVisible[0]?.id ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作记录加载失败");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeFilter]);
 
   useEffect(() => {
     void refresh();
@@ -69,6 +92,10 @@ export function OperationHistoryPanel({ onOpenBranch }: OperationHistoryPanelPro
     return () => { alive = false; };
   }, [selected?.id]);
 
+  useEffect(() => {
+    setSelectedId(current => current && filteredItems.some(item => item.id === current) ? current : filteredItems[0]?.id ?? "");
+  }, [filteredItems]);
+
   return (
     <section className="historyPanel">
       <header className="historyHeader">
@@ -85,22 +112,22 @@ export function OperationHistoryPanel({ onOpenBranch }: OperationHistoryPanelPro
       </header>
 
       <div className="historyStats">
-        <Stat label="总操作" value={payload.stats.total} />
-        <Stat label="提交修复" value={payload.stats.submitted} tone="green" />
-        <Stat label="拒绝删除" value={payload.stats.rejected} tone="red" />
-        <Stat label="继续修改" value={payload.stats.reworked} />
-        <Stat label="预演" value={payload.stats.previewed} />
-        <Stat label="失败" value={payload.stats.failed} tone="red" />
+        <Stat label="全部记录" value={payload.stats.total} active={activeFilter === "all"} onClick={() => setActiveFilter("all")} />
+        <Stat label="提交修复" value={payload.stats.submitted} tone="green" active={activeFilter === "submitted"} onClick={() => setActiveFilter("submitted")} />
+        <Stat label="拒绝删除" value={payload.stats.rejected} tone="red" active={activeFilter === "rejected"} onClick={() => setActiveFilter("rejected")} />
+        <Stat label="继续修改" value={payload.stats.reworked} active={activeFilter === "reworked"} onClick={() => setActiveFilter("reworked")} />
+        <Stat label="预演" value={payload.stats.previewed} active={activeFilter === "previewed"} onClick={() => setActiveFilter("previewed")} />
+        <Stat label="失败" value={payload.stats.failed} tone="red" active={activeFilter === "failed"} onClick={() => setActiveFilter("failed")} />
       </div>
 
       {error ? <div className="historyError">{error}</div> : null}
 
       <div className="historyLayout">
         <div className="historyList" aria-busy={loading}>
-          {payload.items.length === 0 && !loading ? (
-            <div className="historyEmpty">暂无操作记录</div>
+          {filteredItems.length === 0 && !loading ? (
+            <div className="historyEmpty">当前状态没有操作记录</div>
           ) : null}
-          {payload.items.map(item => (
+          {filteredItems.map(item => (
             <button
               className={`historyItem ${item.id === selected?.id ? "active" : ""}`}
               key={item.id}
@@ -108,7 +135,10 @@ export function OperationHistoryPanel({ onOpenBranch }: OperationHistoryPanelPro
             >
               <span className={`historyKindDot ${statusTone(item.status)}`} />
               <span className="historyItemBody">
-                <strong>{KIND_LABELS[item.kind] ?? item.kind}</strong>
+                <span className="historyItemTags">
+                  <strong>{KIND_LABELS[item.kind] ?? item.kind}</strong>
+                  <em className={statusTone(item.status)}>{STATUS_LABELS[item.status] ?? item.status}</em>
+                </span>
                 <small>{item.summary_text || item.branch || item.id}</small>
                 <code>{item.branch || "无分支"}</code>
               </span>
@@ -204,12 +234,24 @@ export function OperationHistoryPanel({ onOpenBranch }: OperationHistoryPanelPro
   );
 }
 
-function Stat({ label, value, tone = "blue" }: { label: string; value: number; tone?: "blue" | "green" | "red" }) {
+function Stat({
+  label,
+  value,
+  tone = "blue",
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  tone?: "blue" | "green" | "red";
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className={`historyStat ${tone}`}>
+    <button className={`historyStat ${tone} ${active ? "active" : ""}`} onClick={onClick}>
       <strong>{value}</strong>
       <span>{label}</span>
-    </div>
+    </button>
   );
 }
 
@@ -230,6 +272,16 @@ function statusTone(status: string): "green" | "red" | "blue" {
   if (["failed", "conflict", "rejected"].includes(status)) return "red";
   if (["succeeded", "committed", "ready-to-commit", "preview-removed", "cleaned", "reverted"].includes(status)) return "green";
   return "blue";
+}
+
+function matchesFilter(item: HistoryOperation, filter: HistoryFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "submitted") return ["fix-commit", "fix-approve"].includes(item.kind);
+  if (filter === "rejected") return item.kind === "fix-reject";
+  if (filter === "reworked") return item.kind === "fix-rework";
+  if (filter === "previewed") return ["fix-preview", "fix-remove-preview"].includes(item.kind);
+  if (filter === "failed") return ["failed", "conflict"].includes(item.status);
+  return true;
 }
 
 function formatTime(value: string): string {
