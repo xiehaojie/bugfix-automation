@@ -84,6 +84,26 @@ export type ExcelAdapterSuggestion = {
   cli_tool?: string;
 };
 
+export type CapabilityArtifactStatus = {
+  name: string;
+  path?: string;
+  available: boolean;
+};
+
+export type CapabilityStatus = {
+  provider: "codex" | "claude";
+  source: string;
+  required: {
+    agents: CapabilityArtifactStatus[];
+    skills: CapabilityArtifactStatus[];
+  };
+  optional?: {
+    agents: CapabilityArtifactStatus[];
+    skills: CapabilityArtifactStatus[];
+  };
+  warnings: string[];
+};
+
 export type ConfigPayload = {
   target_repo: string;
   target_app_path: string;
@@ -105,6 +125,7 @@ export type ConfigPayload = {
   workspaces: Workspace[];
   filters: FilterRule[];
   branch_summary_fields: string[];
+  capability_status?: CapabilityStatus;
   prompt: {
     fields: string[];
     template: string;

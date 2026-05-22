@@ -11,6 +11,7 @@ import os
 import threading
 
 from bugfix_automation.ai_cli import ai_cli_command, ai_cli_label, ai_log_dir_name
+from bugfix_automation.capability_system import install_capabilities, render_capability_contract
 from bugfix_automation.codex_summary import branch_name_from_summary, generate_codex_change_summary
 from bugfix_automation.config import Config, active_workspace_config
 from bugfix_automation.excel_reader import read_sheet
@@ -180,6 +181,8 @@ def process_bug(
         write_worktree_exclude(worktree_path)
         symlink_node_modules(worktree_path, config.target_repo)
         install_project_agents(worktree_path, Path(__file__).resolve().parents[1])
+        capability_result = install_capabilities(config, worktree_path, Path(__file__).resolve().parents[1])
+        _append_capability_warnings(log_path, capability_result)
         git_wrapper_dir = create_no_push_git_wrapper(worktree_path)
         path_prefix = runtime_path_prefix(config.target_repo, git_wrapper_dir)
         workspace = active_workspace_config(config)
@@ -193,6 +196,7 @@ def process_bug(
             image_paths=image_paths,
             scope=workspace.scope,
             ai_tool_label=ai_cli_label(config.cli_tool),
+            capability_contract=render_capability_contract(config),
         )
         set_task_state(config, branch, "running", bug, detail="AI 正在分析并尝试修复。", phase="codex", image_paths=image_paths, operation_id=operation_id)
         ai_session = _start_ai_session(config, operation_id, config.cli_tool, worktree_path, prompt, log_path)
@@ -228,6 +232,17 @@ def process_bug(
         result = _result(bug, "failed", branch, detail, image_paths, log_path=log_path)
         set_task_state(config, branch, result["status"], bug, detail=detail, phase="failed", image_paths=image_paths, operation_id=operation_id)
         return result
+
+
+def _append_capability_warnings(log_path: Path | None, capability_result: dict[str, Any]) -> None:
+    warnings = capability_result.get("warnings")
+    if not log_path or not warnings:
+        return
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as log_file:
+        log_file.write("\nCapability warnings:\n")
+        for warning in warnings:
+            log_file.write(f"- {warning}\n")
 
 
 def _create_run_operation(

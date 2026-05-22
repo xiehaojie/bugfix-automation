@@ -14,6 +14,7 @@ from bugfix_automation.application import fix_validation_service
 from bugfix_automation.approval import approve_fix, count_pending, parse_worktree_list, reject_fix
 from bugfix_automation.config import Config, WorkspaceConfig
 from bugfix_automation.filtering import filter_bugs
+from bugfix_automation.runner import codex_log_path, process_bug
 from bugfix_automation.storage.settings import get_setting
 
 
@@ -47,6 +48,94 @@ branch refs/heads/feature/demo
         ]
 
         self.assertEqual(count_pending(fixes), 3)
+
+    def test_process_bug_installs_capabilities_before_running_ai(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worktree = root / "worktree"
+            worktree.mkdir()
+            wrapper = root / "wrapper"
+            wrapper.mkdir()
+            config = Config(
+                excel_path=root / "bugs.xlsx",
+                sheet_name="Sheet1",
+                assignee="谢浩杰",
+                target_repo=root / "repo",
+                target_app_path="apps/pc-web",
+                worktree_root=root / "worktrees",
+                runs_root=root / "runs",
+                logs_root=root / "logs",
+                data_root=root / "data",
+                storage_db_path=root / "data" / "app.sqlite3",
+                launchd_label="local.test",
+                cli_tool="claude",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+                active_workspace="pc-web",
+                workspaces=(
+                    WorkspaceConfig(
+                        id="pc-web",
+                        name="PC Web",
+                        target_repo=root / "repo",
+                        target_app_path="apps/pc-web",
+                        scope_paths=("apps/pc-web",),
+                        verify_commands=(),
+                        prompt_context_paths=(),
+                        max_concurrency=2,
+                    ),
+                ),
+            )
+            bug = filter_bugs([
+                {
+                    "_excel_row": "2",
+                    "序号": "1",
+                    "提出人状态": "处理中",
+                    "来源系统": "小亦PC",
+                    "对接人": "谢浩杰",
+                    "对接人状态": "",
+                    "问题描述": "按钮状态异常",
+                }
+            ], assignee="谢浩杰")[0]
+            branch = "fix/bug-1-demo"
+            calls: list[str] = []
+
+            def fake_install(_config, worktree_path, _automation_repo):
+                calls.append(f"install:{worktree_path.name}")
+                return {"provider": "claude", "warnings": []}
+
+            def fake_run(command, cwd, path_prefix=None, stdin_text=None, log_path=None):
+                calls.append("run")
+                self.assertIn("Capability system: Claude Code + everything-claude-code", stdin_text)
+
+            with unittest.mock.patch("bugfix_automation.runner.install_capabilities", side_effect=fake_install):
+                with unittest.mock.patch("bugfix_automation.runner.render_capability_contract", return_value="Capability system: Claude Code + everything-claude-code"):
+                    with unittest.mock.patch("bugfix_automation.runner.worktree_path_for_branch", return_value=root / "missing-worktree"):
+                        with unittest.mock.patch("bugfix_automation.runner.branch_worktree_path", return_value=None):
+                            with unittest.mock.patch("bugfix_automation.runner.branch_exists", return_value=False):
+                                with unittest.mock.patch("bugfix_automation.runner.ensure_worktree", return_value=worktree):
+                                    with unittest.mock.patch("bugfix_automation.runner.write_worktree_exclude"):
+                                        with unittest.mock.patch("bugfix_automation.runner.symlink_node_modules"):
+                                            with unittest.mock.patch("bugfix_automation.runner.install_project_agents"):
+                                                with unittest.mock.patch("bugfix_automation.runner.create_no_push_git_wrapper", return_value=wrapper):
+                                                    with unittest.mock.patch("bugfix_automation.runner._run", side_effect=fake_run):
+                                                        with unittest.mock.patch("bugfix_automation.runner.changed_paths", return_value=[]):
+                                                            with unittest.mock.patch("bugfix_automation.runner.has_app_changes", return_value=False):
+                                                                with unittest.mock.patch("bugfix_automation.runner.set_task_state"):
+                                                                    with unittest.mock.patch("bugfix_automation.runner._start_ai_session", return_value=None):
+                                                                        result = process_bug(
+                                                                            config,
+                                                                            bug,
+                                                                            branch,
+                                                                            [],
+                                                                            codex_log_path(config, branch),
+                                                                            "op-1",
+                                                                        )
+
+        self.assertEqual(calls[0], "install:worktree")
+        self.assertIn("run", calls)
+        self.assertEqual(result["status"], "no-change")
 
     def test_approve_fix_commits_and_removes_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -323,6 +412,66 @@ branch refs/heads/feature/demo
 
         self.assertTrue(marked)
         update_cell.assert_called_once()
+
+    def test_rework_fix_installs_capabilities_before_running_ai(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worktree = root / "worktree"
+            worktree.mkdir()
+            wrapper = root / "wrapper"
+            wrapper.mkdir()
+            branch = "fix/1-demo"
+            config = Config(
+                excel_path=root / "bugs.xlsx",
+                sheet_name="Sheet1",
+                assignee="谢浩杰",
+                target_repo=root / "repo",
+                target_app_path="apps/pc-web",
+                worktree_root=root / "worktrees",
+                runs_root=root / "runs",
+                logs_root=root / "logs",
+                data_root=root / "data",
+                storage_db_path=root / "data" / "app.sqlite3",
+                launchd_label="local.test",
+                cli_tool="claude",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+            )
+            calls: list[str] = []
+
+            def fake_install(_config, worktree_path, _automation_repo):
+                calls.append(f"install:{worktree_path.name}")
+                return {"provider": "claude", "warnings": []}
+
+            def fake_run(command, cwd, path_prefix=None, stdin_text=None, log_path=None):
+                calls.append("run")
+                self.assertIn("Capability system: Claude Code + everything-claude-code", stdin_text)
+
+            from bugfix_automation.approval import FixWorktree, rework_fix
+
+            with unittest.mock.patch("bugfix_automation.approval.is_task_active", return_value=False):
+                with unittest.mock.patch("bugfix_automation.approval._find_fix", return_value=FixWorktree(path=worktree, branch=branch)):
+                    with unittest.mock.patch("bugfix_automation.approval.write_worktree_exclude"):
+                        with unittest.mock.patch("bugfix_automation.approval.symlink_node_modules"):
+                            with unittest.mock.patch("bugfix_automation.approval.create_no_push_git_wrapper", return_value=wrapper):
+                                with unittest.mock.patch("bugfix_automation.approval.install_capabilities", side_effect=fake_install):
+                                    with unittest.mock.patch("bugfix_automation.approval.render_capability_contract", return_value="Capability system: Claude Code + everything-claude-code"):
+                                        with unittest.mock.patch("bugfix_automation.approval._create_branch_operation", return_value="op-1"):
+                                            with unittest.mock.patch("bugfix_automation.approval._start_rework_ai_session", return_value=("ai-1", root / "ai.log")):
+                                                with unittest.mock.patch("bugfix_automation.approval._run", side_effect=fake_run):
+                                                    with unittest.mock.patch("bugfix_automation.approval.changed_paths", return_value=[]):
+                                                        with unittest.mock.patch("bugfix_automation.approval.assert_scope_clean"):
+                                                            with unittest.mock.patch("bugfix_automation.approval._git", return_value=""):
+                                                                with unittest.mock.patch("bugfix_automation.approval.tracked_changed_files", return_value=[]):
+                                                                    with unittest.mock.patch("bugfix_automation.approval._finish_rework_ai_session"):
+                                                                        with unittest.mock.patch("bugfix_automation.approval.finish_operation"):
+                                                                            with unittest.mock.patch("bugfix_automation.approval.set_task_state"):
+                                                                                rework_fix(config, branch, note="请重新检查按钮状态")
+
+        self.assertEqual(calls[0], "install:worktree")
+        self.assertIn("run", calls)
 
     def test_upload_excel_accepts_multipart_without_cgi(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

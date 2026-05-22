@@ -1,9 +1,11 @@
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
-from bugfix_automation.config import CanonicalFieldMapping, Config, FilterRule
+from bugfix_automation.capability_system import capability_status, render_capability_contract, resolve_capability_provider
+from bugfix_automation.config import CanonicalFieldMapping, CapabilityProviderConfig, CapabilitySystemConfig, Config, FilterRule
 from bugfix_automation.filtering import filter_bugs, make_branch_name
 from bugfix_automation.prompt import render_codex_prompt
 from bugfix_automation.reporter import conflict_index, write_reports
@@ -148,22 +150,53 @@ class FilteringPromptReportTest(unittest.TestCase):
             prompt_template="补充初始化提示词",
             context_paths=("apps/pc-web/src/app",),
             workspace_name="PC Web",
+            capability_contract="Capability system: Codex + Superpowers",
         )
 
         self.assertIn("apps/pc-web", prompt)
+        self.assertIn("能力系统", prompt)
+        self.assertIn("Capability system: Codex + Superpowers", prompt)
         self.assertIn("不要修改后端", prompt)
         self.assertIn("不要 push", prompt)
-        self.assertIn("bug-triage-agent", prompt)
-        self.assertIn("frontend-fix-agent", prompt)
-        self.assertIn("verification-agent", prompt)
-        self.assertIn("branch-commit-agent", prompt)
         self.assertIn("不要自动 git commit", prompt)
+        self.assertIn("不要使用破坏性 git 命令", prompt)
+        self.assertIn("lint/build/test", prompt)
+        self.assertNotIn("bug-triage-agent", prompt)
+        self.assertNotIn("frontend-fix-agent", prompt)
+        self.assertNotIn("verification-agent", prompt)
+        self.assertNotIn("branch-commit-agent", prompt)
         self.assertIn("一级分类: 个人空间", prompt)
         self.assertIn("二级分类: 文件上传交互", prompt)
         self.assertIn("备注: 页面反馈不明显", prompt)
         self.assertIn("补充初始化提示词", prompt)
         self.assertIn("apps/pc-web/src/app", prompt)
         self.assertIn("工作区: PC Web", prompt)
+
+    def test_prompt_uses_capability_contract_instead_of_local_agent_workflow(self) -> None:
+        bug = filter_bugs([
+            {
+                "_excel_row": "2",
+                "序号": "87",
+                "提出人状态": "处理中",
+                "来源系统": "小亦PC",
+                "对接人": "谢浩杰",
+                "对接人状态": "",
+                "问题描述": "账号离线状态",
+            }
+        ], assignee="谢浩杰")[0]
+
+        prompt = render_codex_prompt(
+            bug,
+            target_app_path="apps/pc-web",
+            capability_contract="Capability system: Claude Code + everything-claude-code\nUse ECC.",
+            ai_tool_label="Claude Code",
+        )
+
+        self.assertIn("Capability system: Claude Code + everything-claude-code\nUse ECC.", prompt)
+        self.assertIn("问题描述: 账号离线状态", prompt)
+        self.assertIn("不要 push", prompt)
+        self.assertNotIn("先委派 bug-triage-agent", prompt)
+        self.assertNotIn("再委派 frontend-fix-agent", prompt)
 
     def test_prompt_can_name_claude_instead_of_codex(self) -> None:
         bug = filter_bugs([
@@ -401,6 +434,127 @@ class FilteringPromptReportTest(unittest.TestCase):
     def test_ai_cli_print_command_uses_provider_specific_non_interactive_mode(self) -> None:
         self.assertEqual(ai_cli_print_command("claude"), ["claude", "--print"])
         self.assertEqual(ai_cli_print_command("codex"), ["codex", "exec", "-"])
+
+    def test_capability_provider_auto_follows_cli_tool(self) -> None:
+        base = Config(
+            excel_path=Path("/tmp/bugs.xlsx"),
+            sheet_name="Sheet1",
+            assignee="谢浩杰",
+            target_repo=Path("/tmp/repo"),
+            target_app_path="apps/pc-web",
+            worktree_root=Path("/tmp/worktrees"),
+            runs_root=Path("/tmp/runs"),
+            logs_root=Path("/tmp/logs"),
+            launchd_label="local.test",
+            cli_tool="claude",
+            schedule_hour=22,
+            schedule_minute=0,
+            approval_web_port=8765,
+            approval_api_port=8766,
+        )
+
+        self.assertEqual(resolve_capability_provider(base), "claude")
+        self.assertEqual(resolve_capability_provider(replace(base, cli_tool="codex")), "codex")
+
+    def test_capability_provider_explicit_config_wins(self) -> None:
+        config = Config(
+            excel_path=Path("/tmp/bugs.xlsx"),
+            sheet_name="Sheet1",
+            assignee="谢浩杰",
+            target_repo=Path("/tmp/repo"),
+            target_app_path="apps/pc-web",
+            worktree_root=Path("/tmp/worktrees"),
+            runs_root=Path("/tmp/runs"),
+            logs_root=Path("/tmp/logs"),
+            launchd_label="local.test",
+            cli_tool="codex",
+            schedule_hour=22,
+            schedule_minute=0,
+            approval_web_port=8765,
+            approval_api_port=8766,
+            capability_system=CapabilitySystemConfig(provider="claude"),
+        )
+
+        self.assertEqual(resolve_capability_provider(config), "claude")
+
+    def test_claude_capability_status_reports_missing_required_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "ecc"
+            (source / "agents").mkdir(parents=True)
+            (source / "agents" / "planner.md").write_text("---\nname: planner\n---\n", encoding="utf-8")
+            config = Config(
+                excel_path=Path("/tmp/bugs.xlsx"),
+                sheet_name="Sheet1",
+                assignee="谢浩杰",
+                target_repo=Path("/tmp/repo"),
+                target_app_path="apps/pc-web",
+                worktree_root=Path("/tmp/worktrees"),
+                runs_root=Path("/tmp/runs"),
+                logs_root=Path("/tmp/logs"),
+                launchd_label="local.test",
+                cli_tool="claude",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+                capability_system=CapabilitySystemConfig(
+                    claude=CapabilityProviderConfig(
+                        source=str(source),
+                        required_agents=("planner", "code-reviewer"),
+                        required_skills=("tdd-workflow",),
+                    )
+                ),
+            )
+
+            status = capability_status(config)
+
+        self.assertEqual(status["provider"], "claude")
+        self.assertTrue(status["required"]["agents"][0]["available"])
+        self.assertIn("Missing required Claude agent: code-reviewer", status["warnings"])
+        self.assertIn("Missing required Claude skill: tdd-workflow", status["warnings"])
+
+    def test_capability_contract_mentions_provider_native_capabilities(self) -> None:
+        codex_config = Config(
+            excel_path=Path("/tmp/bugs.xlsx"),
+            sheet_name="Sheet1",
+            assignee="谢浩杰",
+            target_repo=Path("/tmp/repo"),
+            target_app_path="apps/pc-web",
+            worktree_root=Path("/tmp/worktrees"),
+            runs_root=Path("/tmp/runs"),
+            logs_root=Path("/tmp/logs"),
+            launchd_label="local.test",
+            cli_tool="codex",
+            schedule_hour=22,
+            schedule_minute=0,
+            approval_web_port=8765,
+            approval_api_port=8766,
+            capability_system=CapabilitySystemConfig(
+                codex=CapabilityProviderConfig(
+                    source="superpowers",
+                    required_skills=("superpowers:test-driven-development",),
+                )
+            ),
+        )
+        claude_config = replace(
+            codex_config,
+            cli_tool="claude",
+            capability_system=CapabilitySystemConfig(
+                claude=CapabilityProviderConfig(
+                    source="/tmp/ecc",
+                    required_agents=("planner", "code-reviewer"),
+                    required_skills=("tdd-workflow",),
+                )
+            ),
+        )
+
+        codex_contract = render_capability_contract(codex_config)
+        claude_contract = render_capability_contract(claude_config)
+        self.assertIn("Codex + Superpowers", codex_contract)
+        self.assertIn("superpowers:test-driven-development", codex_contract)
+        self.assertIn("Claude Code + everything-claude-code", claude_contract)
+        self.assertIn("planner, code-reviewer", claude_contract)
+        self.assertIn("tdd-workflow", claude_contract)
 
     def test_log_path_uses_configured_cli_directory(self) -> None:
         config = Config(

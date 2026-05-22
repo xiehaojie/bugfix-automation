@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from typing import Any
 
+from bugfix_automation.capability_system import install_capabilities, render_capability_contract
 from bugfix_automation.config import Config
 from bugfix_automation.excel_writer import update_cell_by_header
 from bugfix_automation.runner import list_bugs
@@ -206,9 +207,10 @@ def rework_fix(config: Config, branch: str, note: str = "", file_paths: list[str
         raise RuntimeError(f"任务仍在执行中，不能重新修改：{state.get('status', '')}/{state.get('phase', '')}")
     fix = _find_fix(config, branch)
     normalized_images = [Path(path).expanduser() for path in image_paths or [] if path.strip()]
-    prompt = _rework_prompt(config, branch, note, file_paths or [], normalized_images)
     write_worktree_exclude(fix.path)
     symlink_node_modules(fix.path, config.target_repo)
+    install_capabilities(config, fix.path, Path(__file__).resolve().parents[1])
+    prompt = _rework_prompt(config, branch, note, file_paths or [], normalized_images)
     git_wrapper_dir = create_no_push_git_wrapper(fix.path)
     path_prefix = runtime_path_prefix(config.target_repo, git_wrapper_dir)
     operation_id = _create_branch_operation(
@@ -368,4 +370,5 @@ def _rework_prompt(config: Config, branch: str, note: str, file_paths: list[str]
         note=note or "无",
         file_paths=files,
         image_paths=images,
+        capability_contract=render_capability_contract(config),
     )

@@ -3,8 +3,37 @@ import unittest
 from pathlib import Path
 import subprocess
 
+from bugfix_automation.capability_system import install_capabilities
+from bugfix_automation.config import CapabilityProviderConfig, CapabilitySystemConfig, Config
 from bugfix_automation.runner import runtime_path_prefix
-from bugfix_automation.worktree import create_no_push_git_wrapper, install_project_agents, rename_current_branch, symlink_node_modules, tracked_changed_files, worktree_path_for_branch, write_worktree_exclude
+from bugfix_automation.worktree import create_no_push_git_wrapper, install_project_agents, out_of_scope_paths, rename_current_branch, symlink_node_modules, tracked_changed_files, worktree_path_for_branch, write_worktree_exclude
+
+
+def _capability_test_config(source: Path) -> Config:
+    return Config(
+        excel_path=Path("issues.xlsx"),
+        sheet_name="Sheet1",
+        assignee="Test",
+        target_repo=Path("repo"),
+        target_app_path="apps/pc-web",
+        worktree_root=Path("worktrees"),
+        runs_root=Path("runs"),
+        logs_root=Path("logs"),
+        launchd_label="local.test",
+        cli_tool="claude",
+        schedule_hour=22,
+        schedule_minute=0,
+        approval_web_port=8765,
+        approval_api_port=8766,
+        capability_system=CapabilitySystemConfig(
+            claude=CapabilityProviderConfig(
+                source=str(source),
+                required_agents=("planner", "code-reviewer"),
+                optional_agents=("security-reviewer",),
+                required_skills=("tdd-workflow",),
+            )
+        ),
+    )
 
 
 class WorktreeTest(unittest.TestCase):
@@ -53,6 +82,103 @@ class WorktreeTest(unittest.TestCase):
             self.assertIn("name: bug-triage-agent", content)
             self.assertIn("description: Analyze bugs before implementation.", content)
             self.assertIn("Read fields and do not edit files.", content)
+
+    def test_install_capabilities_copies_configured_claude_ecc_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            automation_repo = root / "automation"
+            worktree = root / "worktree"
+            source = root / "everything-claude-code"
+            (source / "agents").mkdir(parents=True)
+            (source / "skills" / "tdd-workflow").mkdir(parents=True)
+            worktree.mkdir()
+            automation_repo.mkdir()
+            (source / "agents" / "planner.md").write_text("planner\n", encoding="utf-8")
+            (source / "agents" / "code-reviewer.md").write_text("code reviewer\n", encoding="utf-8")
+            (source / "skills" / "tdd-workflow" / "SKILL.md").write_text("tdd\n", encoding="utf-8")
+            config = _capability_test_config(source)
+
+            status = install_capabilities(config, worktree, automation_repo)
+
+            self.assertEqual(status["provider"], "claude")
+            self.assertEqual(status["source"], str(source))
+            self.assertEqual(status["copied_agents"], ["planner", "code-reviewer"])
+            self.assertEqual(status["copied_skills"], ["tdd-workflow"])
+            self.assertEqual((worktree / ".claude" / "agents" / "planner.md").read_text(encoding="utf-8"), "planner\n")
+            self.assertEqual((worktree / ".claude" / "agents" / "code-reviewer.md").read_text(encoding="utf-8"), "code reviewer\n")
+            self.assertEqual((worktree / ".claude" / "skills" / "tdd-workflow" / "SKILL.md").read_text(encoding="utf-8"), "tdd\n")
+            self.assertFalse((worktree / ".claude" / "agents" / "security-reviewer.md").exists())
+            self.assertIn("Missing optional Claude agent: security-reviewer", status["warnings"])
+
+    def test_install_capabilities_replaces_existing_claude_skill_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            automation_repo = root / "automation"
+            worktree = root / "worktree"
+            source = root / "everything-claude-code"
+            (source / "agents").mkdir(parents=True)
+            (source / "skills" / "tdd-workflow").mkdir(parents=True)
+            (worktree / ".claude" / "skills" / "tdd-workflow").mkdir(parents=True)
+            automation_repo.mkdir()
+            (source / "agents" / "planner.md").write_text("planner\n", encoding="utf-8")
+            (source / "agents" / "code-reviewer.md").write_text("code reviewer\n", encoding="utf-8")
+            (source / "skills" / "tdd-workflow" / "SKILL.md").write_text("fresh\n", encoding="utf-8")
+            stale = worktree / ".claude" / "skills" / "tdd-workflow" / "stale.md"
+            stale.write_text("old\n", encoding="utf-8")
+
+            install_capabilities(_capability_test_config(source), worktree, automation_repo)
+
+            self.assertFalse(stale.exists())
+            self.assertEqual((worktree / ".claude" / "skills" / "tdd-workflow" / "SKILL.md").read_text(encoding="utf-8"), "fresh\n")
+
+    def test_install_capabilities_rejects_invalid_claude_artifact_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            automation_repo = root / "automation"
+            worktree = root / "worktree"
+            source = root / "everything-claude-code"
+            worktree.mkdir()
+            automation_repo.mkdir()
+            config = Config(
+                excel_path=Path("issues.xlsx"),
+                sheet_name="Sheet1",
+                assignee="Test",
+                target_repo=Path("repo"),
+                target_app_path="apps/pc-web",
+                worktree_root=Path("worktrees"),
+                runs_root=Path("runs"),
+                logs_root=Path("logs"),
+                launchd_label="local.test",
+                cli_tool="claude",
+                schedule_hour=22,
+                schedule_minute=0,
+                approval_web_port=8765,
+                approval_api_port=8766,
+                capability_system=CapabilitySystemConfig(
+                    claude=CapabilityProviderConfig(
+                        source=str(source),
+                        required_agents=("../planner",),
+                        required_skills=("../tdd-workflow",),
+                    )
+                ),
+            )
+
+            status = install_capabilities(config, worktree, automation_repo)
+
+            self.assertIn("Invalid required Claude agent name: ../planner", status["warnings"])
+            self.assertIn("Invalid required Claude skill name: ../tdd-workflow", status["warnings"])
+            self.assertFalse((worktree / ".claude").exists())
+
+    def test_claude_capability_files_are_ignored_by_scope_checks(self) -> None:
+        changed = [
+            "apps/pc-web/src/app/page.tsx",
+            ".claude/agents/planner.md",
+            ".claude/skills/tdd-workflow/SKILL.md",
+            ".codex/agents/frontend-fix-agent.toml",
+            "apps/server/src/main.java",
+        ]
+
+        self.assertEqual(out_of_scope_paths(changed, "apps/pc-web"), ["apps/server/src/main.java"])
 
     def test_runtime_path_prefix_reuses_target_repo_node_bins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

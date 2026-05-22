@@ -3,6 +3,9 @@
 分支: {branch}
 修复范围: {target_app_path}
 
+能力系统：
+{capability_contract}
+
 请根据下面的补充信息重新分析并修改。要求：
 - 只修改 {target_app_path} 范围内的代码。
 - 不要 push，不要合并到主分支。

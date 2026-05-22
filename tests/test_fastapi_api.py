@@ -75,10 +75,25 @@ class FastApiApprovalTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         prompt = response.json()["prompt"]
+        self.assertIn("Capability system: Codex + Superpowers", prompt)
         selected_section = prompt.split("原始 Excel 行完整信息：", 1)[0]
         self.assertIn("Excel 选中字段：\n- 无", selected_section)
         self.assertNotIn("问题描述: 账号离线状态", selected_section)
         self.assertIn("问题描述: 账号离线状态", prompt)
+
+    def test_config_payload_includes_capability_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = self.make_config(root)
+            client = TestClient(create_app(config), raise_server_exceptions=False)
+
+            response = client.get("/api/config")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("capability_status", payload)
+        self.assertIn(payload["capability_status"]["provider"], {"codex", "claude"})
+        self.assertIn("warnings", payload["capability_status"])
 
     def test_logs_stream_returns_snapshot_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

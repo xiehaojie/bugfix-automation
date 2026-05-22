@@ -79,6 +79,61 @@ schedule:
         self.assertEqual(config.active_workspace, "pc-web")
         self.assertEqual(config.max_concurrency, 2)
 
+    def test_load_config_parses_capability_system_from_yaml(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            ecc_root = root / "everything-claude-code"
+            config_path.write_text(
+                f"""
+storage_db_path: {root / "data" / "app.sqlite3"}
+cli_tool: claude
+capability_system:
+  provider: auto
+  strict: true
+  codex:
+    source: superpowers
+    required_skills: superpowers:test-driven-development,superpowers:verification-before-completion
+  claude:
+    source: {ecc_root}
+    required_agents: planner,code-reviewer
+    optional_agents: security-reviewer
+    required_skills: tdd-workflow,verification-loop
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.capability_system.provider, "auto")
+        self.assertTrue(config.capability_system.strict)
+        self.assertEqual(config.capability_system.codex.source, "superpowers")
+        self.assertEqual(
+            config.capability_system.codex.required_skills,
+            ("superpowers:test-driven-development", "superpowers:verification-before-completion"),
+        )
+        self.assertEqual(config.capability_system.claude.source, str(ecc_root))
+        self.assertEqual(config.capability_system.claude.required_agents, ("planner", "code-reviewer"))
+        self.assertEqual(config.capability_system.claude.optional_agents, ("security-reviewer",))
+        self.assertEqual(config.capability_system.claude.required_skills, ("tdd-workflow", "verification-loop"))
+
+    def test_load_config_parses_false_capability_strict_string_as_false(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            config_path.write_text(
+                f"""
+storage_db_path: {root / "data" / "app.sqlite3"}
+capability_system:
+  strict: "false"
+""",
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertFalse(config.capability_system.strict)
+
     def test_environment_overrides_yaml(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.yaml"
@@ -258,6 +313,44 @@ prompt:
         self.assertEqual(config.max_concurrency, 4)
         self.assertEqual(config.prompt_fields, ("标题", "详情"))
         self.assertEqual(config.prompt_template, "db template")
+
+    def test_load_config_merges_capability_system_from_sqlite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.yaml"
+            db_path = root / "data" / "app.sqlite3"
+            config_path.write_text(
+                f"""
+storage_db_path: {db_path}
+cli_tool: codex
+capability_system:
+  provider: auto
+  claude:
+    source: /tmp/from-yaml
+""",
+                encoding="utf-8",
+            )
+            set_setting(
+                db_path,
+                "capability_system",
+                {
+                    "provider": "claude",
+                    "strict": True,
+                    "claude": {
+                        "source": "/tmp/from-sqlite",
+                        "required_agents": ["planner"],
+                        "required_skills": ["tdd-workflow"],
+                    },
+                },
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.capability_system.provider, "claude")
+        self.assertTrue(config.capability_system.strict)
+        self.assertEqual(config.capability_system.claude.source, "/tmp/from-sqlite")
+        self.assertEqual(config.capability_system.claude.required_agents, ("planner",))
+        self.assertEqual(config.capability_system.claude.required_skills, ("tdd-workflow",))
 
     def test_minimal_yaml_can_bootstrap_runtime_settings_from_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

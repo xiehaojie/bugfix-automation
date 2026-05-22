@@ -25,6 +25,7 @@ def render_codex_prompt(
     image_paths: list[Path] | None = None,
     scope: str = "frontend",
     ai_tool_label: str = "Codex",
+    capability_contract: str = "",
 ) -> str:
     selected_fields = tuple(key for key in bug.raw if key != "_excel_row") if prompt_fields is None else prompt_fields
     selected_lines = "\n".join(f"- {field}: {_field_value(bug, field)}" for field in selected_fields) or "- 无"
@@ -47,6 +48,7 @@ def render_codex_prompt(
         workspace_name=workspace_name or target_app_path,
         prompt_template=prompt_template or "无",
         ai_tool_label=ai_tool_label,
+        capability_contract=capability_contract or "Capability system: not configured",
         selected_lines=selected_lines,
         raw_lines=raw_lines,
         image_lines=image_lines,

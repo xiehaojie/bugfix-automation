@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
+from bugfix_automation.capability_system import render_capability_contract
 from bugfix_automation.config import Config, active_workspace_config
 from bugfix_automation.excel_writer import update_cell_by_header
 from bugfix_automation.filtering import make_branch_name
@@ -112,6 +113,7 @@ def preview_prompt(config: Config, excel_row: int) -> dict[str, Any]:
         image_paths=images,
         scope=workspace.scope if workspace else "frontend",
         ai_tool_label=ai_cli_label(config.cli_tool),
+        capability_contract=render_capability_contract(config),
     )
     return {
         "ok": True,

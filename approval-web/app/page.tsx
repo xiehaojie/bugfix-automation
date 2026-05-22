@@ -257,6 +257,15 @@ export default function ApprovalPage() {
                   ) : (
                     <span className="configHint">选择用于修复 Bug 的本地 AI CLI 工具</span>
                   )}
+                  {config?.capability_status ? (
+                    <span className="configHint">
+                      能力包：{config.capability_status.provider}
+                      {config.capability_status.source ? ` · ${config.capability_status.source}` : ""}
+                      {config.capability_status.warnings.length > 0
+                        ? ` · ${config.capability_status.warnings.length} 个提示`
+                        : " · 已检测"}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="configField">
                   <label className="configLabel">定时自动修复</label>

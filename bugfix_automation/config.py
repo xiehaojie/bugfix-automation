@@ -62,6 +62,49 @@ class ExcelProfile:
 
 
 @dataclass(frozen=True)
+class CapabilityProviderConfig:
+    source: str = ""
+    required_agents: tuple[str, ...] = ()
+    optional_agents: tuple[str, ...] = ()
+    required_skills: tuple[str, ...] = ()
+    optional_skills: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CapabilitySystemConfig:
+    provider: str = "auto"
+    strict: bool = False
+    codex: CapabilityProviderConfig = field(
+        default_factory=lambda: CapabilityProviderConfig(
+            source="superpowers",
+            required_skills=(
+                "superpowers:using-superpowers",
+                "superpowers:test-driven-development",
+                "superpowers:systematic-debugging",
+                "superpowers:verification-before-completion",
+                "superpowers:requesting-code-review",
+            ),
+            optional_skills=("superpowers:subagent-driven-development",),
+        )
+    )
+    claude: CapabilityProviderConfig = field(
+        default_factory=lambda: CapabilityProviderConfig(
+            source="/Users/xiehaojie/code/everything-claude-code",
+            required_agents=(
+                "planner",
+                "architect",
+                "tdd-guide",
+                "code-reviewer",
+                "typescript-reviewer",
+                "build-error-resolver",
+            ),
+            optional_agents=("security-reviewer", "performance-optimizer"),
+            required_skills=("tdd-workflow", "coding-standards", "verification-loop"),
+        )
+    )
+
+
+@dataclass(frozen=True)
 class Config:
     excel_path: Path
     sheet_name: str
@@ -91,6 +134,7 @@ class Config:
     max_concurrency: int = 2
     validation_target_branches: tuple[str, ...] = ("main", "master", "develop")
     excel_profile: ExcelProfile = ExcelProfile()
+    capability_system: CapabilitySystemConfig = CapabilitySystemConfig()
 
 
 def load_config(config_path: Path | None = None) -> Config:
@@ -172,6 +216,7 @@ def load_config(config_path: Path | None = None) -> Config:
         max_concurrency=max(1, min(int(os.environ.get("BUGFIX_MAX_CONCURRENCY", global_max_concurrency)), 8)),
         validation_target_branches=_string_tuple(value("validation_target_branches", "BUGFIX_VALIDATION_TARGET_BRANCHES", ("main", "master", "develop"))),
         excel_profile=excel_profile,
+        capability_system=_capability_system(yaml_values.get("capability_system")),
     )
 
 
@@ -246,6 +291,8 @@ def _merge_runtime_settings(yaml_values: dict[str, Any], sqlite_settings: dict[s
         merged["filters"] = sqlite_settings["filters"]
     if "active_workspace" in sqlite_settings:
         merged["active_workspace"] = sqlite_settings["active_workspace"]
+    if "capability_system" in sqlite_settings:
+        merged["capability_system"] = sqlite_settings["capability_system"]
 
     prompt_settings = sqlite_settings.get("prompt")
     if isinstance(prompt_settings, dict):
@@ -296,6 +343,49 @@ def _excel_profile(value: Any) -> ExcelProfile:
         prompt_context_paths_provided="context_paths" in prompt,
         branch_summary_fields_provided="branch_summary_fields" in prompt,
     )
+
+
+def _capability_system(value: Any) -> CapabilitySystemConfig:
+    if not isinstance(value, dict):
+        return CapabilitySystemConfig()
+    return CapabilitySystemConfig(
+        provider=str(value.get("provider", "auto")).strip() or "auto",
+        strict=_bool_value(value.get("strict"), False),
+        codex=_capability_provider(
+            value.get("codex"),
+            CapabilitySystemConfig().codex,
+        ),
+        claude=_capability_provider(
+            value.get("claude"),
+            CapabilitySystemConfig().claude,
+        ),
+    )
+
+
+def _capability_provider(value: Any, default: CapabilityProviderConfig) -> CapabilityProviderConfig:
+    if not isinstance(value, dict):
+        return default
+    return CapabilityProviderConfig(
+        source=str(value.get("source", default.source)).strip() or default.source,
+        required_agents=_string_tuple(value.get("required_agents"), default.required_agents),
+        optional_agents=_string_tuple(value.get("optional_agents"), default.optional_agents),
+        required_skills=_string_tuple(value.get("required_skills"), default.required_skills),
+        optional_skills=_string_tuple(value.get("optional_skills"), default.optional_skills),
+    )
+
+
+def _bool_value(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    if value is None:
+        return default
+    return default
 
 
 def update_config_yaml(updates: dict[str, Any], config_path: Path | None = None) -> None:

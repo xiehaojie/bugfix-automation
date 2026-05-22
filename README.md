@@ -102,6 +102,37 @@ BUGFIX_CLI_TOOL=codex
 
 `cli_tool` 可以设为 `codex`、`claude`，也可以设为本机可执行文件的绝对路径。选择 Claude Code 时，自动化会使用 `claude --print --permission-mode bypassPermissions` 在 worktree 里执行，并把截图所在目录通过 `--add-dir` 授权给 Claude 读取。
 
+## AI 能力系统
+
+自动化现在只维护业务上下文、安全边界、worktree 准备、日志和审批流；工程工作流来自 provider-native 能力：
+
+- `cli_tool: codex` 使用 Superpowers skills。
+- `cli_tool: claude` 使用 `everything-claude-code` 中配置的 agents/skills，并同步到每个 worktree 的 `.claude/` 目录。
+
+默认 Claude 能力源是：
+
+```text
+/Users/xiehaojie/code/everything-claude-code
+```
+
+可以通过 `capability_system` 配置 required/optional agents 和 skills。第一版缺失能力会记录 warning 并显示在审批台配置区；`strict: true` 先作为配置位保留，后续可升级为运行前阻断。
+
+示例：
+
+```yaml
+capability_system:
+  provider: auto
+  strict: false
+  codex:
+    source: superpowers
+    required_skills: superpowers:using-superpowers,superpowers:test-driven-development,superpowers:verification-before-completion
+  claude:
+    source: /Users/xiehaojie/code/everything-claude-code
+    required_agents: planner,architect,tdd-guide,code-reviewer,typescript-reviewer,build-error-resolver
+    optional_agents: security-reviewer,performance-optimizer
+    required_skills: tdd-workflow,coding-standards,verification-loop
+```
+
 配置读取顺序是：
 
 ```text

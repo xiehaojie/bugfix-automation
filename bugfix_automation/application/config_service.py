@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from bugfix_automation.capability_system import capability_status
 from bugfix_automation.config import Config, WorkspaceConfig, load_config
 from bugfix_automation.infra.file_metadata import file_metadata
 from bugfix_automation.storage.settings import get_setting, set_setting
@@ -40,6 +41,7 @@ def config_payload(config: Config) -> dict[str, Any]:
             for rule in config.filters
         ],
         "branch_summary_fields": list(config.branch_summary_fields),
+        "capability_status": capability_status(config),
         "prompt": {
             "fields": list(config.prompt_fields),
             "template": config.prompt_template,
