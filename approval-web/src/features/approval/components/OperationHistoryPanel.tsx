@@ -15,6 +15,7 @@ const KIND_LABELS: Record<string, string> = {
   "fix-reject": "拒绝删除",
   "fix-rework": "继续修改",
   "fix-revert": "撤回提交",
+  "fix-merge-target": "合并目标分支",
   "fix-undo-commit": "撤销提交",
   "fix-remove-preview": "移除预演",
   "fix-cleanup-source": "清理来源",

@@ -139,7 +139,7 @@ class Config:
 
 def load_config(config_path: Path | None = None) -> Config:
     repo_root = repo_root_path()
-    yaml_path = config_path or default_config_path()
+    yaml_path = config_path or runtime_config_path()
     yaml_values = _read_config_yaml(yaml_path)
     bootstrap_data_root = _path(os.environ.get("BUGFIX_DATA_ROOT", yaml_values.get("data_root", repo_root / "data")), repo_root)
     bootstrap_db_raw = os.environ.get("BUGFIX_STORAGE_DB_PATH", yaml_values.get("storage_db_path"))
@@ -226,6 +226,20 @@ def repo_root_path() -> Path:
 
 def default_config_path() -> Path:
     return repo_root_path() / "config.yaml"
+
+
+def runtime_config_path() -> Path:
+    raw = os.environ.get("BUGFIX_CONFIG_PATH", "").strip()
+    if raw:
+        return _path(raw, repo_root_path())
+    return default_config_path()
+
+
+def read_config_section(section: str, config_path: Path | None = None) -> dict[str, Any]:
+    path = config_path or runtime_config_path()
+    yaml_values = _read_config_yaml(path)
+    value = yaml_values.get(section)
+    return value if isinstance(value, dict) else {}
 
 
 def _read_sqlite_settings(db_path: Path) -> dict[str, Any]:

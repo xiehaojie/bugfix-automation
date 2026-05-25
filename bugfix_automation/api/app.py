@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from bugfix_automation.api.errors import json_error_handler
-from bugfix_automation.api.routes import approval, bugs, config as config_routes, excel, fix_validations, history, integration, logs, scheduler, static_files
+from bugfix_automation.api.routes import approval, bugs, config as config_routes, excel, fix_validations, history, integration, logs, online_sheets, scheduler, static_files
 from bugfix_automation.config import Config
 
 
@@ -31,6 +31,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         history.router,
         integration.router,
         logs.router,
+        online_sheets.router,
         scheduler.router,
         static_files.router,
     ):

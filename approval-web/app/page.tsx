@@ -35,6 +35,7 @@ import { ExcelAdapterPanel } from "../src/features/approval/components/ExcelAdap
 import { FilterRulesEditor } from "../src/features/approval/components/FilterRulesEditor";
 import { FixValidationCard } from "../src/features/approval/components/FixValidationCard";
 import { OperationHistoryPanel } from "../src/features/approval/components/OperationHistoryPanel";
+import { OnlineSheetPanel } from "../src/features/approval/components/OnlineSheetPanel";
 import { PromptPreview } from "../src/features/approval/components/PromptPreview";
 import { WorkspaceManager } from "../src/features/approval/components/WorkspaceManager";
 import { useApprovalDashboard } from "../src/features/approval/hooks/useApprovalDashboard";
@@ -66,9 +67,15 @@ export default function ApprovalPage() {
     excelFile,
     fixValidation,
     installSchedule,
+    importOnlineSheet,
     loading,
     logPayload,
     maxConcurrency,
+    onlineSheetPreview,
+    onlineSheetProvider,
+    onlineSheetProviders,
+    onlineSheetRange,
+    onlineSheetUrl,
     payload,
     postAction,
     postFixValidationAction,
@@ -76,6 +83,7 @@ export default function ApprovalPage() {
     promptFields,
     promptTemplate,
     refresh,
+    previewOnlineSheet,
     runBug,
     saveAutomationConfig,
     saveExcelAdapter,
@@ -91,6 +99,9 @@ export default function ApprovalPage() {
     setExcelAdapter,
     setExcelFile,
     setMaxConcurrency,
+    setOnlineSheetProvider,
+    setOnlineSheetRange,
+    setOnlineSheetUrl,
     setPromptContextPaths,
     setPromptFields,
     setPromptTemplate,
@@ -223,6 +234,19 @@ export default function ApprovalPage() {
                     </label>
                   </div>
                 </div>
+                <OnlineSheetPanel
+                  providers={onlineSheetProviders}
+                  provider={onlineSheetProvider}
+                  url={onlineSheetUrl}
+                  range={onlineSheetRange}
+                  preview={onlineSheetPreview}
+                  busyAction={busyAction}
+                  onProviderChange={setOnlineSheetProvider}
+                  onUrlChange={setOnlineSheetUrl}
+                  onRangeChange={setOnlineSheetRange}
+                  onPreview={previewOnlineSheet}
+                  onImport={importOnlineSheet}
+                />
               </div>
             </div>
 
@@ -443,6 +467,7 @@ export default function ApprovalPage() {
                   onCommitLocationChange={setCommitLocation}
                   onVerify={() => void postFixValidationAction("verify", "提交预演已生成")}
                   onCommit={() => void postFixValidationAction("commit", "已提交此修复", { location: commitLocation })}
+                  onMergeToTarget={() => void postFixValidationAction("merge-to-target", "已合并到目标分支")}
                   onRevert={() => void postFixValidationAction("revert", "已撤回此提交")}
                   onUndoCommit={() => void postFixValidationAction("undo-commit", "已撤销上次提交")}
                   onRemovePreview={() => void postFixValidationAction("remove-preview", "已移除此预演")}

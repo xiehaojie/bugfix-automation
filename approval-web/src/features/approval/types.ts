@@ -151,6 +151,23 @@ export type LogPayload = {
   size?: number;
 };
 
+export type OnlineSheetProviderOption = {
+  key: string;
+  label: string;
+};
+
+export type OnlineSheetPreview = {
+  ok: boolean;
+  provider: string;
+  source_url: string;
+  workbook_id: string;
+  sheet_id: string;
+  range: string;
+  headers: string[];
+  row_count: number;
+  rows: Record<string, string>[];
+};
+
 export type TaskLike = {
   active: boolean;
   pending?: boolean;
@@ -200,6 +217,8 @@ export type FixValidation = {
   };
   final_commit: string;
   final_commit_location: CommitLocation | "";
+  merged_from_integration_commit?: string;
+  merged_to_target_at?: string;
   revert_commit: string;
   error: string;
   created_at: string;

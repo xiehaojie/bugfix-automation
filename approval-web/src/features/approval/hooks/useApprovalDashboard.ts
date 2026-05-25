@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchJson } from "../api";
-import type { BugItem, CommitLocation, ConfigPayload, DashboardPayload, ExcelAdapterSuggestion, FixValidation, LogPayload, SchedulerPayload } from "../types";
+import type { BugItem, CommitLocation, ConfigPayload, DashboardPayload, ExcelAdapterSuggestion, FixValidation, LogPayload, OnlineSheetPreview, OnlineSheetProviderOption, SchedulerPayload } from "../types";
 import { formatBytes } from "../../../lib/format";
 import { splitLines } from "../../../lib/splitLines";
 import { useAutoRefresh } from "./useAutoRefresh";
@@ -30,6 +30,12 @@ export function useApprovalDashboard() {
   const [fixValidation, setFixValidation] = useState<FixValidation | null>(null);
   const [excelAdapter, setExcelAdapter] = useState<ExcelAdapterSuggestion | null>(null);
   const [commitLocation, setCommitLocation] = useState<CommitLocation>("integration");
+  const [onlineSheetProviders, setOnlineSheetProviders] = useState<OnlineSheetProviderOption[]>([]);
+  const [onlineSheetProvider, setOnlineSheetProvider] = useState("feishu");
+  const [onlineSheetUrl, setOnlineSheetUrl] = useState("");
+  const [onlineSheetRange, setOnlineSheetRange] = useState("A1:Z1000");
+  const [onlineSheetPreview, setOnlineSheetPreview] = useState<OnlineSheetPreview | null>(null);
+  const onlineSheetParamsRef = useRef({ provider: "feishu", url: "", range: "A1:Z1000" });
   const selectedBranchRef = useRef("");
 
   const selected = useMemo(
@@ -93,6 +99,21 @@ export function useApprovalDashboard() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    fetchJson<{ providers: OnlineSheetProviderOption[] }>("/api/online-sheets/providers")
+      .then(data => setOnlineSheetProviders(data.providers ?? []))
+      .catch(() => setOnlineSheetProviders([]));
+  }, []);
+
+  useEffect(() => {
+    onlineSheetParamsRef.current = {
+      provider: onlineSheetProvider,
+      url: onlineSheetUrl.trim(),
+      range: onlineSheetRange.trim() || "A1:Z1000",
+    };
+    setOnlineSheetPreview(null);
+  }, [onlineSheetProvider, onlineSheetRange, onlineSheetUrl]);
 
   useAutoRefresh(refresh);
   useLogPolling(selected?.branch, setLogPayload, refreshLog, config?.api_port);
@@ -174,7 +195,7 @@ export function useApprovalDashboard() {
     }
   };
 
-  const postFixValidationAction = async (action: "verify" | "commit" | "revert" | "undo-commit" | "remove-preview" | "cleanup-source", success: string, body: Record<string, unknown> = {}) => {
+  const postFixValidationAction = async (action: "verify" | "commit" | "merge-to-target" | "revert" | "undo-commit" | "remove-preview" | "cleanup-source", success: string, body: Record<string, unknown> = {}) => {
     if (!selected?.branch) return;
     setBusyAction(`fix-validation:${action}`);
     setToast("");
@@ -216,6 +237,68 @@ export function useApprovalDashboard() {
       await refresh();
     } catch (error) {
       setToast(error instanceof Error ? error.message : "上传失败");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const previewOnlineSheet = async () => {
+    if (!onlineSheetUrl.trim()) {
+      setToast("请先粘贴在线表格链接");
+      return;
+    }
+    setBusyAction("/api/online-sheets/preview");
+    setToast("");
+    const requestParams = {
+      provider: onlineSheetProvider,
+      url: onlineSheetUrl.trim(),
+      range: onlineSheetRange.trim() || "A1:Z1000",
+    };
+    try {
+      const data = await fetchJson<OnlineSheetPreview>("/api/online-sheets/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestParams),
+      });
+      const latestParams = onlineSheetParamsRef.current;
+      if (
+        latestParams.provider !== requestParams.provider
+        || latestParams.url !== requestParams.url
+        || latestParams.range !== requestParams.range
+      ) {
+        return;
+      }
+      setOnlineSheetPreview(data);
+      setToast(`在线表格预览成功：${data.row_count} 行，${data.headers.length} 列`);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "在线表格预览失败");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const importOnlineSheet = async () => {
+    if (!onlineSheetUrl.trim()) {
+      setToast("请先粘贴在线表格链接");
+      return;
+    }
+    setBusyAction("/api/online-sheets/import");
+    setToast("");
+    try {
+      const data = await fetchJson<{ ok?: boolean; excel_path: string; file?: ConfigPayload["excel_file"]; headers?: string[]; row_count?: number; online_sheet?: Record<string, string> }>("/api/online-sheets/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: onlineSheetProvider,
+          url: onlineSheetUrl.trim(),
+          range: onlineSheetRange.trim() || "A1:Z1000",
+        }),
+      });
+      setToast(`已导入在线表格：${data.row_count ?? 0} 行，${data.headers?.length ?? 0} 列`);
+      setOnlineSheetPreview(null);
+      await refresh();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "在线表格导入失败");
     } finally {
       setBusyAction("");
     }
@@ -363,9 +446,15 @@ export function useApprovalDashboard() {
     excelPathInput,
     fixValidation,
     installSchedule,
+    importOnlineSheet,
     loading,
     logPayload,
     maxConcurrency,
+    onlineSheetPreview,
+    onlineSheetProvider,
+    onlineSheetProviders,
+    onlineSheetRange,
+    onlineSheetUrl,
     payload,
     postAction,
     postFixValidationAction,
@@ -373,6 +462,7 @@ export function useApprovalDashboard() {
     promptFields,
     promptTemplate,
     refresh,
+    previewOnlineSheet,
     runBug,
     saveAutomationConfig,
     saveExcelAdapter,
@@ -390,6 +480,10 @@ export function useApprovalDashboard() {
     setExcelFile,
     setExcelPathInput,
     setMaxConcurrency,
+    setOnlineSheetPreview,
+    setOnlineSheetProvider,
+    setOnlineSheetRange,
+    setOnlineSheetUrl,
     setPromptContextPaths,
     setPromptFields,
     setPromptTemplate,

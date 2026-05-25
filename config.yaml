@@ -8,3 +8,23 @@ storage_db_path: data/app.sqlite3
 cli_tool: codex
 approval_web_port: 8765
 approval_api_port: 8766
+
+# Online sheet provider credentials. Environment variables with the same
+# meaning still take precedence, so keep real production secrets out of git if
+# this repository is shared.
+online_sheets:
+  tencent_docs:
+    token: ""
+    mcp_url: https://docs.qq.com/openapi/mcp
+    mcp_tool: get_content
+    mcp_arguments_template: '{"url":"{source_url}","range":"{range}"}'
+    read_url_template: ""
+    access_token: ""
+    client_id: ""
+    open_id: ""
+  wps:
+    access_token: ""
+    api_base_url: https://openapi.wps.cn
+    spreadsheet_api_kind: et
+    default_sheet_idx: "0"
+    read_url_template: ""

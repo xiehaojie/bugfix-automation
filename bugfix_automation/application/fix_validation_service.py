@@ -147,6 +147,51 @@ def commit_validation(config: Config, branch: str, location: str) -> dict[str, A
         return data
 
 
+def merge_validation_to_target(config: Config, branch: str) -> dict[str, Any]:
+    """Apply an integration-branch validation commit onto the target branch."""
+    _validate_fix_branch(config, branch)
+    with _validation_lock(config, branch):
+        data = get_validation(config, branch)
+        if data["status"] != "committed" or not data.get("final_commit"):
+            raise RuntimeError("只有已提交到临时集成分支的验证单才能合并到目标分支")
+        if data.get("final_commit_location") == "target":
+            raise RuntimeError("此修复已经在目标分支上，无需重复合并")
+        if data.get("final_commit_location") not in {"", "integration"}:
+            raise RuntimeError(f"不支持的提交位置：{data.get('final_commit_location')}")
+
+        workspace = active_workspace_config(config)
+        target_repo = workspace.target_repo if workspace else config.target_repo
+        original_commit = data["final_commit"]
+
+        with _repo_lock(config):
+            _ensure_target_branch(config, target_repo, data["target_branch"])
+            if _has_uncommitted_changes(target_repo):
+                raise RuntimeError("目标分支工作区不干净，不能合并")
+            rc, _, err = _git_rc(target_repo, ["cherry-pick", original_commit])
+            if rc != 0:
+                _run_git_quiet(target_repo, ["cherry-pick", "--abort"])
+                raise RuntimeError(f"合并到目标分支失败: {err}")
+            target_commit = _git(target_repo, ["rev-parse", "HEAD"]).strip()
+
+            try:
+                _remove_preview_artifacts(
+                    config,
+                    target_repo,
+                    Path(data["integration_worktree"]),
+                    data["integration_branch"],
+                )
+            except Exception:
+                pass
+
+        data["final_commit"] = target_commit
+        data["final_commit_location"] = "target"
+        data["merged_from_integration_commit"] = original_commit
+        data["merged_to_target_at"] = datetime.now().isoformat()
+        _save_validation(config, branch, data)
+        _record_validation_op(config, "fix-merge-target", "committed", branch, data)
+        return data
+
+
 def revert_validation(config: Config, branch: str) -> dict[str, Any]:
     _validate_fix_branch(config, branch)
     with _validation_lock(config, branch):

@@ -126,6 +126,19 @@ class TestCommitAndRevert:
         assert reverted["status"] == "reverted"
         assert len(reverted["revert_commit"]) == 40
 
+    def test_merges_integration_commit_to_target_branch(self, config: Config, tmp_repo: Path):
+        _create_fix_branch(tmp_repo, "fix/bug-merge", "merge.ts", "// merge\n")
+        fix_validation_service.verify(config, "fix/bug-merge")
+
+        committed = fix_validation_service.commit_validation(config, "fix/bug-merge", "integration")
+        merged = fix_validation_service.merge_validation_to_target(config, "fix/bug-merge")
+
+        assert committed["final_commit_location"] == "integration"
+        assert merged["status"] == "committed"
+        assert merged["final_commit_location"] == "target"
+        assert merged["merged_from_integration_commit"] == committed["final_commit"]
+        assert (tmp_repo / "apps" / "pc-web" / "merge.ts").read_text() == "// merge\n"
+
     def test_commits_to_target_when_requested(self, config: Config, tmp_repo: Path):
         _create_fix_branch(tmp_repo, "fix/bug-target", "target.ts", "// target\n")
         fix_validation_service.verify(config, "fix/bug-target")

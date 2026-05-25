@@ -1,4 +1,4 @@
-import { AlertTriangle, BadgeCheck, GitCommit, GitMerge, Info, Loader2, RotateCcw, Trash2, Undo2, XCircle } from "lucide-react";
+import { AlertTriangle, BadgeCheck, GitCommit, GitMerge, GitPullRequestArrow, Info, Loader2, RotateCcw, Trash2, Undo2, XCircle } from "lucide-react";
 
 import type { CommitLocation, FixItem, FixValidation } from "../types";
 
@@ -50,6 +50,7 @@ interface FixValidationCardProps {
   onCommitLocationChange: (location: CommitLocation) => void;
   onVerify: () => void;
   onCommit: () => void;
+  onMergeToTarget: () => void;
   onRevert: () => void;
   onUndoCommit: () => void;
   onRemovePreview: () => void;
@@ -66,6 +67,7 @@ export function FixValidationCard({
   onCommitLocationChange,
   onVerify,
   onCommit,
+  onMergeToTarget,
   onRevert,
   onUndoCommit,
   onRemovePreview,
@@ -81,9 +83,13 @@ export function FixValidationCard({
   const showVerify    = !["verifying", "committed", "reverted", "cleaned"].includes(status);
   const showCommit    = ["ready-to-commit", "ai-review-needed"].includes(status);
   const showRevert    = status === "committed";
+  const showMergeTarget = status === "committed" && validation?.final_commit_location === "integration";
   const showRemove    = ["ready-to-commit", "conflict", "verify-failed", "ai-review-needed"].includes(status);
   const showCleanup   = status === "committed" || status === "reverted";
   const showReject    = !["committed", "reverted", "cleaned"].includes(status);
+  const statusNote = status === "committed" && validation?.final_commit_location === "integration"
+    ? `修复已提交到临时集成分支。如需让 ${validation?.target_branch || "main"} 生效，请点击「合并到${validation?.target_branch || "main"}」；如有问题可用 revert 生成反向提交。`
+    : STATUS_NOTES[status];
 
   return (
     <section className={`fixValidationCard ${status}`}>
@@ -96,12 +102,12 @@ export function FixValidationCard({
       </div>
 
       {/* 状态说明：告诉用户发生了什么以及下一步怎么做 */}
-      {STATUS_NOTES[status] ? (
+      {statusNote ? (
         <div className={`fixValidationNote ${["conflict", "verify-failed"].includes(status) ? "warn" : ""}`}>
           {["conflict", "verify-failed"].includes(status)
             ? <AlertTriangle size={13} />
             : <Info size={13} />}
-          {STATUS_NOTES[status]}
+          {statusNote}
         </div>
       ) : null}
 
@@ -125,8 +131,8 @@ export function FixValidationCard({
           </label>
           <label className={commitLocation === "target" ? "active" : ""}>
             <input type="radio" name="commitLocation" checked={commitLocation === "target"} onChange={() => onCommitLocationChange("target")} />
-            <span>直接写入目标分支 {validation?.target_branch || "main"}</span>
-            <small>改动立即生效，可用「撤回此提交」生成反向提交撤销</small>
+            <span>直接合并到目标分支 {validation?.target_branch || "main"}</span>
+            <small>改动立即写入目标分支，可用「撤回此提交」生成反向提交撤销</small>
           </label>
         </fieldset>
       ) : null}
@@ -158,6 +164,18 @@ export function FixValidationCard({
           >
             {busyAction === "fix-validation:commit" ? <Loader2 size={16} className="spin" /> : <GitCommit size={16} />}
             提交此修复
+          </button>
+        )}
+
+        {showMergeTarget && (
+          <button
+            className="button secondary"
+            disabled={actionDisabled || isBusy}
+            onClick={onMergeToTarget}
+            title={`将临时集成分支上的提交合并到目标分支 ${validation?.target_branch || "main"}`}
+          >
+            {busyAction === "fix-validation:merge-to-target" ? <Loader2 size={16} className="spin" /> : <GitPullRequestArrow size={16} />}
+            合并到{validation?.target_branch || "main"}
           </button>
         )}
 

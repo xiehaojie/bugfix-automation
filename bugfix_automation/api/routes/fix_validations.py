@@ -39,6 +39,15 @@ def commit_fix_validation(
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
 
+@router.post("/{branch:path}/merge-to-target")
+def merge_fix_validation_to_target(branch: str, config: Config = Depends(get_config)):
+    try:
+        data = fix_validation_service.merge_validation_to_target(config, branch)
+        return {"ok": True, "validation": data}
+    except (ValueError, RuntimeError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+
 @router.post("/{branch:path}/revert")
 def revert_fix_validation(branch: str, config: Config = Depends(get_config)):
     try:

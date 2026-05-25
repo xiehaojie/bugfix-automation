@@ -383,6 +383,33 @@ class FastApiApprovalTest(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["adapter"]["canonical_fields"]["description"], "问题描述")
 
+    def test_online_sheet_providers_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            client = TestClient(create_app(self.make_config(Path(tmp))), raise_server_exceptions=False)
+
+            response = client.get("/api/online-sheets/providers")
+
+        self.assertEqual(response.status_code, 200)
+        providers = {item["key"] for item in response.json()["providers"]}
+        self.assertGreaterEqual(providers, {"feishu", "dingtalk", "tencent_docs", "wps"})
+
+    def test_online_sheet_preview_returns_json_error_without_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            client = TestClient(create_app(self.make_config(Path(tmp))), raise_server_exceptions=False)
+
+            response = client.post(
+                "/api/online-sheets/preview",
+                json={
+                    "provider": "feishu",
+                    "url": "https://example.feishu.cn/sheets/abc123",
+                    "range": "A1:C10",
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["ok"])
+        self.assertIn("飞书", response.json()["error"])
+
     def test_excel_adapter_save_endpoint_persists_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

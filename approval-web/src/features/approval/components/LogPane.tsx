@@ -29,6 +29,10 @@ type LogBlock =
   | { type: "codex"; text: string }
   | { type: "exec"; commands: string[]; status: string; output: string };
 
+type CodexSegment =
+  | { type: "markdown"; text: string }
+  | { type: "code"; lang: string; text: string };
+
 /* ─── 日志解析 ─── */
 
 type ParseState = "info" | "user" | "codex" | "exec-cmds" | "exec-output";
@@ -168,6 +172,85 @@ const markdownComponents = {
   code: CollapsibleCodeBlock,
 };
 
+function isDiffStart(line: string): boolean {
+  return /^diff --git /.test(line) || /^@@ -\d+,\d+ \+\d+,\d+ @@/.test(line);
+}
+
+function isDiffLine(line: string): boolean {
+  return (
+    line === "" ||
+    /^diff --git /.test(line) ||
+    /^index [0-9a-f]+\.\.[0-9a-f]+/.test(line) ||
+    /^--- /.test(line) ||
+    /^\+\+\+ /.test(line) ||
+    /^@@ /.test(line) ||
+    /^[ +\\-]/.test(line)
+  );
+}
+
+function shouldLeaveDiffBlock(line: string, nextLine: string | undefined): boolean {
+  return line === "" && nextLine !== undefined && /^[-*]\s+`?[\w\u4e00-\u9fa5]/.test(nextLine);
+}
+
+function splitCodexSegments(text: string): CodexSegment[] {
+  const lines = text.split("\n");
+  const segments: CodexSegment[] = [];
+  const markdown: string[] = [];
+
+  const flushMarkdown = () => {
+    const value = markdown.join("\n").trim();
+    if (value) segments.push({ type: "markdown", text: value });
+    markdown.length = 0;
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const fence = lines[i].match(/^```(\S*)\s*$/);
+    if (fence) {
+      flushMarkdown();
+      const lang = fence[1] || "text";
+      const code: string[] = [];
+      i += 1;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+        code.push(lines[i]);
+        i += 1;
+      }
+      segments.push({ type: "code", lang, text: code.join("\n") });
+      continue;
+    }
+
+    if (lines[i] === "*** Begin Patch") {
+      flushMarkdown();
+      const code = [lines[i]];
+      i += 1;
+      while (i < lines.length) {
+        code.push(lines[i]);
+        if (lines[i] === "*** End Patch") break;
+        i += 1;
+      }
+      segments.push({ type: "code", lang: "patch", text: code.join("\n") });
+      continue;
+    }
+
+    if (isDiffStart(lines[i])) {
+      flushMarkdown();
+      const code: string[] = [];
+      while (i < lines.length && isDiffLine(lines[i])) {
+        if (shouldLeaveDiffBlock(lines[i], lines[i + 1])) break;
+        code.push(lines[i]);
+        i += 1;
+      }
+      i -= 1;
+      segments.push({ type: "code", lang: "diff", text: code.join("\n").trimEnd() });
+      continue;
+    }
+
+    markdown.push(lines[i]);
+  }
+
+  flushMarkdown();
+  return segments;
+}
+
 /* ─── 工具函数：缩短执行命令用于展示 ─── */
 
 function shortenExecCmd(cmd: string): string {
@@ -216,22 +299,37 @@ function CodexBlock({
   text: string;
   streaming: boolean;
 }) {
+  const segments = useMemo(() => splitCodexSegments(text), [text]);
+
   return (
     <div className="vsc-log-md">
       <div className="vsc-log-md-avatar">
         <RobotOutlined />
       </div>
       <div className="vsc-log-md-body">
-        <XMarkdown
-          components={markdownComponents}
-          streaming={
-            streaming
-              ? { hasNextChunk: true, enableAnimation: true, tail: true }
-              : undefined
+        {segments.map((segment, index) => {
+          const isLast = index === segments.length - 1;
+          if (segment.type === "code") {
+            return (
+              <CollapsibleCodeBlock key={index} block lang={segment.lang}>
+                {segment.text}
+              </CollapsibleCodeBlock>
+            );
           }
-        >
-          {text}
-        </XMarkdown>
+          return (
+            <XMarkdown
+              key={index}
+              components={markdownComponents}
+              streaming={
+                streaming && isLast
+                  ? { hasNextChunk: true, enableAnimation: true, tail: true }
+                  : undefined
+              }
+            >
+              {segment.text}
+            </XMarkdown>
+          );
+        })}
       </div>
     </div>
   );

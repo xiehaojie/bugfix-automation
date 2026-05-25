@@ -48,6 +48,12 @@ class ExcelAdapterSaveRequest(BaseModel):
     adapter: dict[str, Any] = {}
 
 
+class OnlineSheetRequest(BaseModel):
+    provider: str = ""
+    url: str = ""
+    range: str = "A1:Z1000"
+
+
 class ReworkRequest(BaseModel):
     branch: str = ""
     note: str = ""
