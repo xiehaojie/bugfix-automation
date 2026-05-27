@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bugfix-automation"
+version = "1.0.0"
+description = "夜间前端 bug 自动修复工具"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+]
+
+[project.scripts]
+bugfix-automation = "bugfix_automation.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["bugfix_automation*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
