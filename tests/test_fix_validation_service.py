@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from bugfix_automation.application import fix_validation_service
+from bugfix_automation.orchestration import fix_validation
 from bugfix_automation.config import Config, WorkspaceConfig
 
 
@@ -72,7 +72,7 @@ class TestVerify:
     def test_creates_preview_for_fix_branch(self, config: Config, tmp_repo: Path):
         sha = _create_fix_branch(tmp_repo, "fix/bug-1", "fix1.ts", "// fix 1\n")
 
-        result = fix_validation_service.verify(config, "fix/bug-1")
+        result = fix_validation.verify(config, "fix/bug-1")
 
         assert result["status"] == "ready-to-commit"
         assert result["source_commit"] == sha
@@ -85,7 +85,7 @@ class TestVerify:
         source_node_modules = tmp_repo / "apps" / "pc-web" / "node_modules"
         source_node_modules.mkdir()
 
-        result = fix_validation_service.verify(config, "fix/bug-logs")
+        result = fix_validation.verify(config, "fix/bug-logs")
         worktree_node_modules = Path(result["integration_worktree"]) / "apps" / "pc-web" / "node_modules"
 
         assert result["status"] == "ready-to-commit"
@@ -95,7 +95,7 @@ class TestVerify:
 
     def test_rejects_non_fix_branch(self, config: Config):
         with pytest.raises(ValueError, match="只能验证"):
-            fix_validation_service.verify(config, "feature/demo")
+            fix_validation.verify(config, "feature/demo")
 
     def test_marks_conflict(self, config: Config, tmp_repo: Path):
         subprocess.run(["git", "checkout", "-b", "feature/base-change"], cwd=tmp_repo, check=True, capture_output=True)
@@ -106,7 +106,7 @@ class TestVerify:
         _create_fix_branch(tmp_repo, "fix/conflict", "index.ts", "// fix change\n")
         subprocess.run(["git", "checkout", "feature/base-change"], cwd=tmp_repo, check=True, capture_output=True)
 
-        result = fix_validation_service.verify(config, "fix/conflict")
+        result = fix_validation.verify(config, "fix/conflict")
 
         assert result["status"] == "conflict"
         assert "cherry-pick" in result["error"]
@@ -115,10 +115,10 @@ class TestVerify:
 class TestCommitAndRevert:
     def test_commits_and_reverts_on_integration_branch(self, config: Config, tmp_repo: Path):
         _create_fix_branch(tmp_repo, "fix/bug-commit", "commit.ts", "// commit\n")
-        fix_validation_service.verify(config, "fix/bug-commit")
+        fix_validation.verify(config, "fix/bug-commit")
 
-        committed = fix_validation_service.commit_validation(config, "fix/bug-commit", "integration")
-        reverted = fix_validation_service.revert_validation(config, "fix/bug-commit")
+        committed = fix_validation.commit_validation(config, "fix/bug-commit", "integration")
+        reverted = fix_validation.revert_validation(config, "fix/bug-commit")
 
         assert committed["status"] == "committed"
         assert committed["final_commit_location"] == "integration"
@@ -128,10 +128,10 @@ class TestCommitAndRevert:
 
     def test_merges_integration_commit_to_target_branch(self, config: Config, tmp_repo: Path):
         _create_fix_branch(tmp_repo, "fix/bug-merge", "merge.ts", "// merge\n")
-        fix_validation_service.verify(config, "fix/bug-merge")
+        fix_validation.verify(config, "fix/bug-merge")
 
-        committed = fix_validation_service.commit_validation(config, "fix/bug-merge", "integration")
-        merged = fix_validation_service.merge_validation_to_target(config, "fix/bug-merge")
+        committed = fix_validation.commit_validation(config, "fix/bug-merge", "integration")
+        merged = fix_validation.merge_validation_to_target(config, "fix/bug-merge")
 
         assert committed["final_commit_location"] == "integration"
         assert merged["status"] == "committed"
@@ -141,9 +141,9 @@ class TestCommitAndRevert:
 
     def test_commits_to_target_when_requested(self, config: Config, tmp_repo: Path):
         _create_fix_branch(tmp_repo, "fix/bug-target", "target.ts", "// target\n")
-        fix_validation_service.verify(config, "fix/bug-target")
+        fix_validation.verify(config, "fix/bug-target")
 
-        result = fix_validation_service.commit_validation(config, "fix/bug-target", "target")
+        result = fix_validation.commit_validation(config, "fix/bug-target", "target")
 
         assert result["status"] == "committed"
         assert result["final_commit_location"] == "target"
@@ -151,15 +151,15 @@ class TestCommitAndRevert:
 
     def test_rejects_invalid_commit_location(self, config: Config):
         with pytest.raises(ValueError, match="提交位置"):
-            fix_validation_service.commit_validation(config, "fix/missing", "main")
+            fix_validation.commit_validation(config, "fix/missing", "main")
 
 
 class TestPreviewAndCleanup:
     def test_remove_preview_keeps_fix_branch(self, config: Config, tmp_repo: Path):
         _create_fix_branch(tmp_repo, "fix/bug-preview", "preview.ts", "// preview\n")
-        verified = fix_validation_service.verify(config, "fix/bug-preview")
+        verified = fix_validation.verify(config, "fix/bug-preview")
 
-        result = fix_validation_service.remove_preview(config, "fix/bug-preview")
+        result = fix_validation.remove_preview(config, "fix/bug-preview")
         branch_rc = subprocess.run(["git", "rev-parse", "--verify", "fix/bug-preview"], cwd=tmp_repo, capture_output=True).returncode
 
         assert result["status"] == "preview-removed"
@@ -171,10 +171,10 @@ class TestPreviewAndCleanup:
         wt_path = config.worktree_root / "fix-bug-clean"
         wt_path.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "worktree", "add", str(wt_path), "fix/bug-clean"], cwd=tmp_repo, check=True, capture_output=True)
-        fix_validation_service.verify(config, "fix/bug-clean")
-        fix_validation_service.commit_validation(config, "fix/bug-clean", "integration")
+        fix_validation.verify(config, "fix/bug-clean")
+        fix_validation.commit_validation(config, "fix/bug-clean", "integration")
 
-        result = fix_validation_service.cleanup_source(config, "fix/bug-clean")
+        result = fix_validation.cleanup_source(config, "fix/bug-clean")
         branch_rc = subprocess.run(["git", "rev-parse", "--verify", "fix/bug-clean"], cwd=tmp_repo, capture_output=True).returncode
 
         assert result["status"] == "cleaned"

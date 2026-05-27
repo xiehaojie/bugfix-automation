@@ -1,6 +1,6 @@
 import unittest
 
-from bugfix_automation.codex_summary import branch_name_from_summary, sanitize_summary
+from bugfix_automation.orchestration.codex_summary import branch_name_from_summary, sanitize_summary
 
 
 class CodexSummaryTest(unittest.TestCase):

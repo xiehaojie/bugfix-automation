@@ -5,12 +5,12 @@ import plistlib
 from unittest.mock import patch
 
 from bugfix_automation.config import Config
-from bugfix_automation.scheduler import install_launchd_at, launchd_status, resolve_cli_tool, uninstall_launchd
+from bugfix_automation.scheduling.scheduler import install_launchd_at, launchd_status, resolve_cli_tool, uninstall_launchd
 
 
 class SchedulerTest(unittest.TestCase):
     def test_resolve_cli_tool_fails_without_absolute_path(self) -> None:
-        with patch("bugfix_automation.scheduler.shutil.which", return_value=None):
+        with patch("bugfix_automation.scheduling.scheduler.shutil.which", return_value=None):
             with patch.object(Path, "exists", return_value=False):
                 with self.assertRaisesRegex(FileNotFoundError, "没有找到 CLI 工具"):
                     resolve_cli_tool("codex")
@@ -35,7 +35,7 @@ class SchedulerTest(unittest.TestCase):
             approval_web_port=8765,
             approval_api_port=8766,
         )
-        with patch("bugfix_automation.scheduler.Path.exists", return_value=False):
+        with patch("bugfix_automation.scheduling.scheduler.Path.exists", return_value=False):
             status = launchd_status(config)
 
         self.assertFalse(status["installed"])
@@ -62,8 +62,8 @@ class SchedulerTest(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "local.test.plist"
-            with patch("bugfix_automation.scheduler.plist_path", return_value=path):
-                with patch("bugfix_automation.scheduler.subprocess.run") as run:
+            with patch("bugfix_automation.scheduling.scheduler.plist_path", return_value=path):
+                with patch("bugfix_automation.scheduling.scheduler.subprocess.run") as run:
                     install_launchd_at(config, 8, 45)
 
             payload = plistlib.loads(path.read_bytes())
@@ -91,8 +91,8 @@ class SchedulerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "local.test.plist"
             path.write_text("demo", encoding="utf-8")
-            with patch("bugfix_automation.scheduler.plist_path", return_value=path):
-                with patch("bugfix_automation.scheduler.subprocess.run") as run:
+            with patch("bugfix_automation.scheduling.scheduler.plist_path", return_value=path):
+                with patch("bugfix_automation.scheduling.scheduler.subprocess.run") as run:
                     result = uninstall_launchd(config)
 
         self.assertTrue(result["removed"])

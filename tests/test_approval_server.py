@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from bugfix_automation.approval_server import PortProcess, serve, serve_api_only
+from bugfix_automation.server.approval_server import PortProcess, serve, serve_api_only
 from bugfix_automation.config import Config
 
 
@@ -31,10 +31,10 @@ class ApprovalServerTest(unittest.TestCase):
     def test_api_only_reports_occupied_port_with_pid(self) -> None:
         output = io.StringIO()
         with patch(
-            "bugfix_automation.approval_server._listening_port_processes",
+            "bugfix_automation.server.approval_server._listening_port_processes",
             return_value=[PortProcess(pid="12345", command="python -m bugfix_automation.cli approval-api")],
         ):
-            with patch("bugfix_automation.approval_server.serve_api") as serve_api_mock:
+            with patch("bugfix_automation.server.approval_server.serve_api") as serve_api_mock:
                 with redirect_stdout(output):
                     with self.assertRaises(SystemExit) as raised:
                         serve_api_only(_config())
@@ -55,10 +55,10 @@ class ApprovalServerTest(unittest.TestCase):
             return []
 
         output = io.StringIO()
-        with patch("bugfix_automation.approval_server._listening_port_processes", side_effect=port_processes):
-            with patch("bugfix_automation.approval_server._frontend_is_healthy", return_value=False):
-                with patch("bugfix_automation.approval_server.threading.Thread") as thread_mock:
-                    with patch("bugfix_automation.approval_server.subprocess.run") as run_mock:
+        with patch("bugfix_automation.server.approval_server._listening_port_processes", side_effect=port_processes):
+            with patch("bugfix_automation.server.approval_server._frontend_is_healthy", return_value=False):
+                with patch("bugfix_automation.server.approval_server.threading.Thread") as thread_mock:
+                    with patch("bugfix_automation.server.approval_server.subprocess.run") as run_mock:
                         with redirect_stdout(output):
                             with self.assertRaises(SystemExit) as raised:
                                 serve(_config())
@@ -81,11 +81,11 @@ class ApprovalServerTest(unittest.TestCase):
             return []
 
         output = io.StringIO()
-        with patch("bugfix_automation.approval_server._listening_port_processes", side_effect=port_processes):
-            with patch("bugfix_automation.approval_server._frontend_is_healthy", return_value=True):
-                with patch("bugfix_automation.approval_server.threading.Thread") as thread_mock:
+        with patch("bugfix_automation.server.approval_server._listening_port_processes", side_effect=port_processes):
+            with patch("bugfix_automation.server.approval_server._frontend_is_healthy", return_value=True):
+                with patch("bugfix_automation.server.approval_server.threading.Thread") as thread_mock:
                     thread_instance = thread_mock.return_value
-                    with patch("bugfix_automation.approval_server.subprocess.run") as run_mock:
+                    with patch("bugfix_automation.server.approval_server.subprocess.run") as run_mock:
                         with redirect_stdout(output):
                             serve(_config())
 

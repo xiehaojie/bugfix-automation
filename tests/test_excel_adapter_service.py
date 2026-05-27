@@ -3,7 +3,7 @@ import asyncio
 import tempfile
 from unittest.mock import patch
 
-from bugfix_automation.application.excel_adapter_service import analyze_excel_adapter, save_excel_adapter, sanitize_adapter_suggestion
+from bugfix_automation.services.excel_adapter_service import analyze_excel_adapter, save_excel_adapter, sanitize_adapter_suggestion
 from bugfix_automation.config import Config
 from bugfix_automation.storage.settings import get_setting
 from tests.test_excel_reader import write_minimal_xlsx
@@ -128,7 +128,7 @@ def test_analyze_excel_adapter_writes_log_and_result_files() -> None:
         }
 
         with patch(
-            "bugfix_automation.application.excel_adapter_service._run_cli_json",
+            "bugfix_automation.services.excel_adapter_service._run_cli_json",
             return_value=(suggestion, '{"prompt":{}}', ""),
         ) as run_cli:
             response = asyncio.run(analyze_excel_adapter(config, cli_tool="claude"))
@@ -180,7 +180,7 @@ def test_analyze_excel_adapter_rejects_overlapping_requests() -> None:
                 await release.wait()
                 return suggestion, "{}", ""
 
-            with patch("bugfix_automation.application.excel_adapter_service._run_cli_json", side_effect=slow_cli):
+            with patch("bugfix_automation.services.excel_adapter_service._run_cli_json", side_effect=slow_cli):
                 first = asyncio.create_task(analyze_excel_adapter(config))
                 await started.wait()
                 second = await analyze_excel_adapter(config)

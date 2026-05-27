@@ -3,9 +3,9 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from bugfix_automation.filtering import filter_bugs
-from bugfix_automation.images import export_bug_images, image_ids_from_row, image_map
-from bugfix_automation.runner import ai_cli_command, codex_command
+from bugfix_automation.domain.filtering import filter_bugs
+from bugfix_automation.excel.images import export_bug_images, image_ids_from_row, image_map
+from bugfix_automation.orchestration.bug_runner import ai_cli_command
 
 
 def write_image_xlsx(path: Path) -> None:
@@ -63,8 +63,8 @@ class ImagesTest(unittest.TestCase):
             self.assertEqual(paths[0].read_bytes(), b"fake-png")
             self.assertEqual(paths[0].suffix, ".png")
 
-    def test_codex_command_includes_image_arguments(self) -> None:
-        command = codex_command("/usr/local/bin/codex", "/tmp/worktree", "prompt", [Path("/tmp/one.png"), Path("/tmp/two.jpg")])
+    def test_ai_cli_command_includes_image_arguments(self) -> None:
+        command = ai_cli_command("/usr/local/bin/codex", "/tmp/worktree", "prompt", [Path("/tmp/one.png"), Path("/tmp/two.jpg")])
 
         self.assertIn("--image", command)
         self.assertIn("/tmp/one.png", command)

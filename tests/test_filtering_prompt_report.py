@@ -4,14 +4,14 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from bugfix_automation.capability_system import capability_status, render_capability_contract, resolve_capability_provider
+from bugfix_automation.domain.capability_system import capability_status, render_capability_contract, resolve_capability_provider
 from bugfix_automation.config import CanonicalFieldMapping, CapabilityProviderConfig, CapabilitySystemConfig, Config, FilterRule
-from bugfix_automation.filtering import filter_bugs, make_branch_name
-from bugfix_automation.prompt import render_codex_prompt
-from bugfix_automation.reporter import conflict_index, write_reports
-from bugfix_automation.ai_cli import ai_cli_print_command
-from bugfix_automation.runner import ai_cli_command, assert_scope_clean, codex_command, codex_log_path
-from bugfix_automation.worktree import out_of_scope_paths
+from bugfix_automation.domain.filtering import filter_bugs, make_branch_name
+from bugfix_automation.domain.prompt import render_codex_prompt
+from bugfix_automation.reporting.reporter import conflict_index, write_reports
+from bugfix_automation.domain.ai_cli import ai_cli_print_command
+from bugfix_automation.orchestration.bug_runner import ai_cli_command, assert_scope_clean, codex_log_path
+from bugfix_automation.git.worktree import out_of_scope_paths
 
 
 class FilteringPromptReportTest(unittest.TestCase):
@@ -402,8 +402,8 @@ class FilteringPromptReportTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "检测到超出前端范围的改动"):
             assert_scope_clean(["apps/pc-web/src/app/page.tsx", "packages/shared/index.ts"], "apps/pc-web")
 
-    def test_codex_command_uses_workspace_sandbox_and_never_approval(self) -> None:
-        command = codex_command("/usr/local/bin/codex", "/tmp/worktree", "prompt")
+    def test_ai_cli_command_uses_codex_exec_mode(self) -> None:
+        command = ai_cli_command("/usr/local/bin/codex", "/tmp/worktree", "prompt")
 
         self.assertEqual(command[:2], ["/usr/local/bin/codex", "exec"])
         self.assertIn("--cd", command)

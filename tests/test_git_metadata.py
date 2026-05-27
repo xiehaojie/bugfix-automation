@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bugfix_automation.worktree import commit_all, diff_stat, head_sha, tracked_changed_files
+from bugfix_automation.git.worktree import commit_all, diff_stat, head_sha, tracked_changed_files
 
 
 class GitMetadataTest(unittest.TestCase):

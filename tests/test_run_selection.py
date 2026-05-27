@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bugfix_automation.filtering import filter_bugs
-from bugfix_automation.runner import select_one_bug, write_bug_results
+from bugfix_automation.domain.filtering import filter_bugs
+from bugfix_automation.orchestration.bug_runner import select_one_bug, write_bug_results
 
 
 class RunSelectionTest(unittest.TestCase):

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bugfix_automation.application import integration_service
+from bugfix_automation.orchestration import integration
 from bugfix_automation.config import Config, WorkspaceConfig
 
 
@@ -76,7 +76,7 @@ def _create_fix_branch_with_commit(repo: Path, branch: str, filename: str, conte
 
 class TestCreateRun:
     def test_creates_run_with_draft_status(self, config: Config):
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-1", "fix/bug-2"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-1", "fix/bug-2"])
         assert data["status"] == "draft"
         assert data["workspace_id"] == "pc-web"
         assert data["target_branch"] == "main"
@@ -86,31 +86,31 @@ class TestCreateRun:
 
     def test_rejects_empty_branches(self, config: Config):
         with pytest.raises(ValueError, match="至少需要选择一个"):
-            integration_service.create_run(config, "pc-web", "main", [])
+            integration.create_run(config, "pc-web", "main", [])
 
     def test_rejects_empty_target_branch(self, config: Config):
         with pytest.raises(ValueError, match="必须指定目标分支"):
-            integration_service.create_run(config, "pc-web", "", ["fix/bug-1"])
+            integration.create_run(config, "pc-web", "", ["fix/bug-1"])
 
     def test_run_json_persisted(self, config: Config):
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-1"])
-        loaded = integration_service.get_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-1"])
+        loaded = integration.get_run(config, data["run_id"])
         assert loaded["run_id"] == data["run_id"]
         assert loaded["status"] == "draft"
 
     def test_target_branch_slash_does_not_create_nested_run_id(self, config: Config):
-        data = integration_service.create_run(config, "pc-web", "feature/demo", ["fix/bug-1"])
+        data = integration.create_run(config, "pc-web", "feature/demo", ["fix/bug-1"])
         assert "/" not in data["run_id"]
         assert "feature-demo" in data["run_id"]
 
 
 class TestListRuns:
     def test_empty_when_no_runs(self, config: Config):
-        assert integration_service.list_runs(config) == []
+        assert integration.list_runs(config) == []
 
     def test_lists_created_runs(self, config: Config):
-        integration_service.create_run(config, "pc-web", "main", ["fix/bug-1"])
-        runs = integration_service.list_runs(config)
+        integration.create_run(config, "pc-web", "main", ["fix/bug-1"])
+        runs = integration.list_runs(config)
         assert len(runs) == 1
         assert runs[0]["status"] == "draft"
 
@@ -118,7 +118,7 @@ class TestListRuns:
 class TestBranchDiscovery:
     def test_available_fix_branches_includes_local_branch_without_worktree(self, config: Config, tmp_repo: Path):
         sha = _create_fix_branch_with_commit(tmp_repo, "fix/bug-local-only", "local.ts", "// local\n")
-        branches = integration_service.available_fix_branches(config)
+        branches = integration.available_fix_branches(config)
         item = next(branch for branch in branches if branch["branch"] == "fix/bug-local-only")
         assert item["has_worktree"] is False
         assert item["path"] == ""
@@ -133,7 +133,7 @@ class TestBranchDiscovery:
             cwd=tmp_repo, check=True, capture_output=True,
         )
 
-        branches = integration_service.available_fix_branches(config)
+        branches = integration.available_fix_branches(config)
         item = next(branch for branch in branches if branch["branch"] == "fix/bug-with-worktree")
         assert item["has_worktree"] is True
         assert item["path"] == str(wt_path)
@@ -146,7 +146,7 @@ class TestBranchDiscovery:
         subprocess.run(["git", "checkout", "-b", "integration/tmp"], cwd=tmp_repo, check=True, capture_output=True)
         subprocess.run(["git", "checkout", "main"], cwd=tmp_repo, check=True, capture_output=True)
 
-        data = integration_service.target_branches(config)
+        data = integration.target_branches(config)
         assert data["current"] == "main"
         assert "main" in data["branches"]
         assert "feature/review" in data["branches"]
@@ -157,8 +157,8 @@ class TestBranchDiscovery:
 class TestStartRun:
     def test_applies_branch_with_commit(self, config: Config, tmp_repo: Path):
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-1", "fix1.ts", "// fix 1\n")
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-1"])
-        result = integration_service.start_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-1"])
+        result = integration.start_run(config, data["run_id"])
         assert result["items"][0]["status"] == "applied"
         assert result["items"][0]["apply_method"] == "cherry-pick-no-commit"
         assert result["status"] == "pending-user-approval"
@@ -166,8 +166,8 @@ class TestStartRun:
     def test_multiple_branches_applied(self, config: Config, tmp_repo: Path):
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-1", "fix1.ts", "// fix 1\n")
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-2", "fix2.ts", "// fix 2\n")
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-1", "fix/bug-2"])
-        result = integration_service.start_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-1", "fix/bug-2"])
+        result = integration.start_run(config, data["run_id"])
         assert all(item["status"] == "applied" for item in result["items"])
         assert result["status"] == "pending-user-approval"
 
@@ -185,8 +185,8 @@ class TestStartRun:
         subprocess.run(["git", "commit", "-m", "fix B"], cwd=tmp_repo, check=True, capture_output=True)
         subprocess.run(["git", "checkout", "main"], cwd=tmp_repo, check=True, capture_output=True)
 
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/conflict-1", "fix/conflict-2"])
-        result = integration_service.start_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/conflict-1", "fix/conflict-2"])
+        result = integration.start_run(config, data["run_id"])
         # First applies, second conflicts
         assert result["items"][0]["status"] == "applied"
         assert result["items"][1]["status"] == "conflict"
@@ -194,27 +194,27 @@ class TestStartRun:
 
     def test_rejects_invalid_status(self, config: Config, tmp_repo: Path):
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-x", "fix_x.ts", "// x\n")
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-x"])
-        result = integration_service.start_run(config, data["run_id"])
-        result = integration_service.confirm_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-x"])
+        result = integration.start_run(config, data["run_id"])
+        result = integration.confirm_run(config, data["run_id"])
         with pytest.raises(RuntimeError, match="不能开始集成"):
-            integration_service.start_run(config, data["run_id"])
+            integration.start_run(config, data["run_id"])
 
 
 class TestConfirmRun:
     def test_creates_final_commit(self, config: Config, tmp_repo: Path):
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-c", "fix_c.ts", "// c\n")
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-c"])
-        integration_service.start_run(config, data["run_id"])
-        result = integration_service.confirm_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-c"])
+        integration.start_run(config, data["run_id"])
+        result = integration.confirm_run(config, data["run_id"])
         assert result["status"] == "committed"
         assert result["final_commit"]
         assert len(result["final_commit"]) == 40
 
     def test_rejects_when_not_pending(self, config: Config):
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-1"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-1"])
         with pytest.raises(RuntimeError, match="不能确认提交"):
-            integration_service.confirm_run(config, data["run_id"])
+            integration.confirm_run(config, data["run_id"])
 
 
 class TestCleanupRun:
@@ -228,10 +228,10 @@ class TestCleanupRun:
             cwd=tmp_repo, check=True, capture_output=True,
         )
 
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-clean"])
-        integration_service.start_run(config, data["run_id"])
-        integration_service.confirm_run(config, data["run_id"])
-        result = integration_service.cleanup_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-clean"])
+        integration.start_run(config, data["run_id"])
+        integration.confirm_run(config, data["run_id"])
+        result = integration.cleanup_run(config, data["run_id"])
         assert result["status"] == "cleaned"
         assert "fix/bug-clean" in result.get("cleaned_branches", [])
         # Branch should be deleted
@@ -242,20 +242,20 @@ class TestCleanupRun:
         assert rc != 0
 
     def test_rejects_when_not_committed(self, config: Config):
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-1"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-1"])
         with pytest.raises(RuntimeError, match="只有已提交的集成单才能清理"):
-            integration_service.cleanup_run(config, data["run_id"])
+            integration.cleanup_run(config, data["run_id"])
 
 
 class TestAbortRun:
     def test_removes_integration_worktree(self, config: Config, tmp_repo: Path):
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-abort", "fix_abort.ts", "// abort\n")
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-abort"])
-        integration_service.start_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-abort"])
+        integration.start_run(config, data["run_id"])
         worktree_path = Path(data["integration_worktree"])
         # Worktree should exist after start
         # Now abort
-        result = integration_service.abort_run(config, data["run_id"])
+        result = integration.abort_run(config, data["run_id"])
         assert result["status"] == "aborted"
         # Fix branch should still exist
         rc = subprocess.run(
@@ -266,20 +266,20 @@ class TestAbortRun:
 
     def test_rejects_when_already_committed(self, config: Config, tmp_repo: Path):
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-ac", "fix_ac.ts", "// ac\n")
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-ac"])
-        integration_service.start_run(config, data["run_id"])
-        integration_service.confirm_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-ac"])
+        integration.start_run(config, data["run_id"])
+        integration.confirm_run(config, data["run_id"])
         with pytest.raises(RuntimeError, match="已提交的集成单不能中止"):
-            integration_service.abort_run(config, data["run_id"])
+            integration.abort_run(config, data["run_id"])
 
 
 class TestDeleteRun:
     def test_deletes_draft_run_record_without_deleting_fix_branch(self, config: Config, tmp_repo: Path):
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-delete-draft", "delete_draft.ts", "// draft\n")
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-delete-draft"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-delete-draft"])
         run_dir = config.runs_root / "integration-runs" / data["run_id"]
 
-        result = integration_service.delete_run(config, data["run_id"])
+        result = integration.delete_run(config, data["run_id"])
 
         assert result == {"run_id": data["run_id"], "deleted": True}
         assert not run_dir.exists()
@@ -291,20 +291,20 @@ class TestDeleteRun:
 
     def test_deletes_aborted_run_record(self, config: Config, tmp_repo: Path):
         _create_fix_branch_with_commit(tmp_repo, "fix/bug-delete-aborted", "delete_aborted.ts", "// aborted\n")
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-delete-aborted"])
-        integration_service.start_run(config, data["run_id"])
-        integration_service.abort_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-delete-aborted"])
+        integration.start_run(config, data["run_id"])
+        integration.abort_run(config, data["run_id"])
 
-        integration_service.delete_run(config, data["run_id"])
+        integration.delete_run(config, data["run_id"])
 
         with pytest.raises(FileNotFoundError):
-            integration_service.get_run(config, data["run_id"])
+            integration.get_run(config, data["run_id"])
 
     def test_rejects_running_run(self, config: Config):
-        data = integration_service.create_run(config, "pc-web", "main", ["fix/bug-running"])
-        loaded = integration_service.get_run(config, data["run_id"])
+        data = integration.create_run(config, "pc-web", "main", ["fix/bug-running"])
+        loaded = integration.get_run(config, data["run_id"])
         loaded["status"] = "running"
-        integration_service._save_run(config, data["run_id"], loaded)
+        integration._save_run(config, data["run_id"], loaded)
 
         with pytest.raises(RuntimeError, match="正在执行中"):
-            integration_service.delete_run(config, data["run_id"])
+            integration.delete_run(config, data["run_id"])
