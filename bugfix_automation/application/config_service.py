@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 from typing import Any
 
 from bugfix_automation.capability_system import capability_status
@@ -51,8 +52,10 @@ def config_payload(config: Config) -> dict[str, Any]:
 
 
 def select_workspace(config: Config, workspace_id: str) -> dict[str, Any]:
-    if not any(workspace.id == workspace_id for workspace in config.workspaces):
+    workspace = next((workspace for workspace in config.workspaces if workspace.id == workspace_id), None)
+    if workspace is None:
         raise ValueError(f"未知工作区: {workspace_id}")
+    _ensure_git_repo(workspace.target_repo)
     set_setting(config.storage_db_path, "active_workspace", workspace_id)
     return {"ok": True, "config": config_payload(load_config())}
 
@@ -134,8 +137,10 @@ def add_workspace(payload: dict[str, Any]) -> dict[str, Any]:
     if not repo_paths:
         raise ValueError("仓库路径不能为空")
     for rp in repo_paths:
-        if not Path(rp).expanduser().is_dir():
+        repo_path = Path(rp).expanduser()
+        if not repo_path.is_dir():
             raise ValueError(f"仓库路径不存在: {rp}")
+        _ensure_git_repo(repo_path)
 
     target_repo = repo_paths[0]
     workspace_id = name.lower().replace(" ", "-").replace("/", "-")
@@ -203,3 +208,25 @@ def _workspace_setting(workspace: WorkspaceConfig) -> dict[str, Any]:
         "max_concurrency": workspace.max_concurrency,
         "scope": workspace.scope,
     }
+
+
+def _ensure_git_repo(path: Path) -> None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=path,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+    except FileNotFoundError as exc:
+        raise ValueError("未找到 Git 命令，请先安装 Git 并加入 PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError(f"检查 Git 仓库超时: {path}") from exc
+    except OSError as exc:
+        raise ValueError(f"无法访问仓库路径: {path}，{exc}") from exc
+
+    if result.returncode != 0 or result.stdout.strip().lower() != "true":
+        detail = (result.stderr or result.stdout or "").strip()
+        suffix = f"（{detail}）" if detail else ""
+        raise ValueError(f"请选择 Git 仓库根目录: {path}{suffix}")

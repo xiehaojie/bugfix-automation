@@ -381,14 +381,16 @@ def _run(command: list[str], cwd: Path, path_prefix: str | Path | None = None, s
     env = os.environ.copy()
     if path_prefix is not None:
         env["PATH"] = f"{path_prefix}{os.pathsep}{env.get('PATH', '')}"
+    text_kwargs = {"text": True, "encoding": "utf-8", "errors": "replace"} if stdin_text is not None else {}
+    timeout_seconds = int(env.get("BUGFIX_AI_CLI_TIMEOUT_SECONDS", "1800"))
     if log_path is None:
-        subprocess.run(command, cwd=cwd, env=env, input=stdin_text, text=stdin_text is not None, check=True)
+        subprocess.run(command, cwd=cwd, env=env, input=stdin_text, check=True, timeout=timeout_seconds, **text_kwargs)
         return
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as log_file:
         log_file.write(f"\n$ {' '.join(command)}\n")
         log_file.flush()
-        subprocess.run(command, cwd=cwd, env=env, input=stdin_text, text=stdin_text is not None, stdout=log_file, stderr=subprocess.STDOUT, check=True)
+        subprocess.run(command, cwd=cwd, env=env, input=stdin_text, stdout=log_file, stderr=subprocess.STDOUT, check=True, timeout=timeout_seconds, **text_kwargs)
 
 
 def codex_log_path(config: Config, branch: str) -> Path:

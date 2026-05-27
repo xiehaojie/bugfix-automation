@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from bugfix_automation.config import load_config, repo_root_path
-from bugfix_automation.excel_reader import read_sheet
+from bugfix_automation.excel_reader import read_sheet, resolve_sheet_name, sheet_names
 from bugfix_automation.infra.file_metadata import file_metadata
 from bugfix_automation.infra.uploads import safe_upload_name, validate_uploaded_xlsx, validate_xlsx
 from bugfix_automation.storage.repositories import save_excel_import
@@ -32,39 +32,44 @@ def upload_excel_bytes(filename: str, file_bytes: bytes) -> dict[str, Any]:
     target = uploads_root / safe_upload_name(original_name)
     target.write_bytes(file_bytes)
     validate_uploaded_xlsx(target)
-    _save_excel_setting(target)
-    _record_excel_import(original_name, target)
+    sheet_name = _save_excel_setting(target)
+    _record_excel_import(original_name, target, sheet_name)
     return {
         "ok": True,
         "excel_path": str(target),
+        "sheet_name": sheet_name,
+        "sheets": sheet_names(target),
         "filename": original_name,
         "file": file_metadata(target, original_name=original_name),
-        "config": {"excel_path": str(target)},
+        "config": {"excel_path": str(target), "sheet_name": sheet_name},
     }
 
 
 def select_excel_path(raw_path: str) -> dict[str, Any]:
     path = Path(raw_path).expanduser().resolve()
     validate_xlsx(path)
-    _save_excel_setting(path)
-    _record_excel_import(path.name, path)
-    return {"ok": True, "excel_path": str(path), "file": file_metadata(path)}
+    sheet_name = _save_excel_setting(path)
+    _record_excel_import(path.name, path, sheet_name)
+    return {"ok": True, "excel_path": str(path), "sheet_name": sheet_name, "sheets": sheet_names(path), "file": file_metadata(path)}
 
 
-def _save_excel_setting(path: Path) -> None:
+def _save_excel_setting(path: Path) -> str:
     config = load_config()
-    set_setting(config.storage_db_path, "excel", {"excel_path": str(path), "sheet_name": config.sheet_name})
+    sheet_name = resolve_sheet_name(path, config.sheet_name)
+    set_setting(config.storage_db_path, "excel", {"excel_path": str(path), "sheet_name": sheet_name})
+    return sheet_name
 
 
-def _record_excel_import(original_name: str, path: Path) -> None:
+def _record_excel_import(original_name: str, path: Path, sheet_name: str | None = None) -> None:
     try:
         config = load_config()
-        rows = read_sheet(path, config.sheet_name)
+        selected_sheet = sheet_name or resolve_sheet_name(path, config.sheet_name)
+        rows = read_sheet(path, selected_sheet)
         save_excel_import(
             config.storage_db_path,
             original_filename=original_name,
             stored_path=path,
-            sheet_name=config.sheet_name,
+            sheet_name=selected_sheet,
             rows=rows,
             config_snapshot_id=None,
             mapping=config.excel_profile.canonical_fields,

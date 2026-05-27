@@ -6,9 +6,9 @@ import os
 from pathlib import Path
 import plistlib
 import subprocess
-import shutil
 import sys
 
+from bugfix_automation.ai_cli import resolve_ai_cli_tool
 from bugfix_automation.config import Config
 
 
@@ -34,6 +34,8 @@ def plist_payload(config: Config) -> dict:
 
 
 def install_launchd(config: Config) -> Path:
+    if os.name != "posix" or sys.platform != "darwin":
+        raise NotImplementedError("Scheduled launchd jobs are only supported on macOS. Use manual runs on this platform.")
     path = plist_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(plistlib.dumps(plist_payload(config)))
@@ -48,6 +50,15 @@ def install_launchd_at(config: Config, hour: int, minute: int) -> Path:
 
 
 def uninstall_launchd(config: Config) -> dict:
+    if os.name != "posix" or sys.platform != "darwin":
+        return {
+            "ok": True,
+            "unloaded": False,
+            "removed": False,
+            "plist_path": str(plist_path(config)),
+            "unsupported": True,
+            "detail": "launchd scheduling is only supported on macOS.",
+        }
     path = plist_path(config)
     unloaded = subprocess.run(["launchctl", "unload", str(path)], check=False)
     removed = False
@@ -59,6 +70,19 @@ def uninstall_launchd(config: Config) -> dict:
 
 def launchd_status(config: Config) -> dict:
     path = plist_path(config)
+    if os.name != "posix" or sys.platform != "darwin":
+        return {
+            "label": config.launchd_label,
+            "plist_path": str(path),
+            "installed": False,
+            "loaded": False,
+            "unsupported": True,
+            "detail": "launchd scheduling is only supported on macOS.",
+            "schedule_hour": config.schedule_hour,
+            "schedule_minute": config.schedule_minute,
+            "stdout_log": str(config.logs_root / "manual-run.log"),
+            "stderr_log": str(config.logs_root / "manual-run.err.log"),
+        }
     loaded = False
     detail = ""
     schedule_hour = config.schedule_hour
@@ -110,10 +134,10 @@ def start_manual_run(config: Config) -> dict:
 
 def resolve_cli_tool(cli_tool: str) -> str:
     candidate = Path(cli_tool).expanduser()
-    if candidate.is_absolute():
+    if candidate.is_absolute() and candidate.exists():
         return str(candidate)
-    found = shutil.which(cli_tool)
-    if found:
+    found = resolve_ai_cli_tool(cli_tool)
+    if found != cli_tool:
         return found
     known = [
         Path.home() / ".nvm" / "versions" / "node" / "v24.14.1" / "bin" / cli_tool,

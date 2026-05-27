@@ -1,0 +1,76 @@
+# English demo config. To use it:
+#   python -m bugfix_automation.cli init --locale en --reset-config --reset-runtime
+
+excel_path: examples/bugs.en.xlsx
+sheet_name: Bugs
+assignee: demo-user
+active_workspace: demo
+max_concurrency: 1
+
+target_repo: examples/demo-target-repo
+target_app_path: src
+
+worktree_root: .target-worktrees
+runs_root: runs
+logs_root: logs
+data_root: data
+storage_db_path: data/app.sqlite3
+
+cli_tool: codex
+approval_web_port: 8765
+approval_api_port: 8766
+launchd_label: local.bugfix-automation.nightly
+
+excel_processed_status_column: Assignee Status
+excel_processed_status_value: Done
+
+workspaces:
+  - id: demo
+    name: Demo App
+    target_repo: examples/demo-target-repo
+    target_app_path: src
+    scope_paths: src
+    verify_commands: npm test
+    prompt_context_paths: src
+    max_concurrency: 1
+
+filters:
+  - field: Assignee
+    op: equals
+    value: demo-user
+  - field: Assignee Status
+    op: not_in
+    values: Done,Closed
+  - field: Requester Status
+    op: in
+    values: Open,In Progress
+
+prompt:
+  fields: ID,Title,Description,Priority,Source,Requester Status,Assignee,Assignee Status,Notes
+  template: Fix the bug with the smallest scoped change. Keep the change inside the configured target path and explain if the fix needs backend or data changes.
+  context_paths: src
+
+branch_summary_fields:
+  - Title
+
+excel_profile:
+  canonical_fields:
+    issue_id: ID
+    source_system: Source
+    priority: Priority
+    primary_category: Category
+    secondary_category: Area
+    requester: Reporter
+    request_date: Created At
+    requester_status: Requester Status
+    assignee: Assignee
+    assignee_status: Assignee Status
+    resolved_date: Resolved At
+    description: Description
+    remark: Notes
+    remark2: Extra Notes
+  prompt:
+    fields: ID,Title,Description,Priority,Source,Requester Status,Assignee,Assignee Status,Notes
+    template: Fix the bug with the smallest scoped change. Keep the change inside the configured target path and explain if the fix needs backend or data changes.
+    context_paths: src
+    branch_summary_fields: Title

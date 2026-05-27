@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
@@ -14,7 +16,14 @@ router = APIRouter()
 
 @router.get("/api/items")
 def get_items(config: Config = Depends(get_config)):
-    return approval_service.list_items(config)
+    try:
+        return approval_service.list_items(config)
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()
+        message = detail or "当前工作区不是有效 Git 仓库，无法读取 worktree 列表"
+        return JSONResponse({"ok": False, "error": message}, status_code=400)
+    except RuntimeError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
 
 @router.get("/api/file-content")

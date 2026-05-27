@@ -130,6 +130,7 @@ export function WorkspaceManager({ workspaces, activeWorkspace, onClose, onRefre
 
   const handleSelect = async (workspaceId: string) => {
     setBusy(`select-${workspaceId}`);
+    setError("");
     try {
       await fetchJson("/api/workspace/select", {
         method: "POST",
@@ -137,8 +138,8 @@ export function WorkspaceManager({ workspaces, activeWorkspace, onClose, onRefre
         body: JSON.stringify({ workspace_id: workspaceId }),
       });
       onRefresh();
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "切换工作区失败");
     } finally {
       setBusy("");
     }

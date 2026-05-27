@@ -382,6 +382,231 @@ button, input, select, textarea { font: inherit; }
   overflow: hidden;
 }
 
+.configPanel.configModal {
+  width: min(1120px, calc(100vw - 48px));
+  max-height: min(840px, calc(100vh - 48px));
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, .24);
+  animation: modalIn 180ms ease;
+}
+
+.configModalBody {
+  min-height: 0;
+  overflow: auto;
+  background: #fff;
+}
+
+.configModal .configSection {
+  border-top: 0;
+}
+
+.configModal .configSectionBody {
+  padding: 18px 20px;
+}
+
+.configGuideHeader {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfdff;
+}
+
+.configGuideIntro {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.configGuideIntro strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.configGuideIntro span {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.configStepNav {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #f6f8fb;
+}
+
+.configStepNav::before {
+  content: "";
+  position: absolute;
+  top: 29px;
+  left: 38px;
+  right: 38px;
+  height: 1px;
+  background: #d7e0ec;
+}
+
+.configStepButton {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  align-items: start;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #475569;
+  padding: 8px 10px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition), transform var(--transition);
+}
+
+.configStepButton:hover {
+  border-color: #dbe7f5;
+  background: rgba(255, 255, 255, .72);
+}
+
+.configStepButton.active {
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .08), 0 0 0 1px rgba(37, 99, 235, .08);
+  transform: translateY(-1px);
+}
+
+.configStepButton.done {
+  color: #166534;
+}
+
+.configStepNumber {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  grid-row: 1 / span 2;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+}
+
+.configStepButton.active .configStepNumber {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.configStepButton.done .configStepNumber {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.configStepButton svg {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 6px;
+  color: #64748b;
+}
+
+.configStepButton.active svg {
+  color: #2563eb;
+}
+
+.configStepButton.done svg {
+  color: #16a34a;
+}
+
+.configStepCopy {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.configStepCopy strong,
+.configStepCopy small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.configStepCopy strong {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.configStepCopy small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.configLearningNote {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.configLearningNote.wide {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+.configLearningNote strong {
+  color: #1d4ed8;
+  font-size: 13px;
+}
+
+.configLearningNote span {
+  color: #31518c;
+  line-height: 1.55;
+}
+
+.configGuideFooter {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  background: #fbfdff;
+}
+
+.configGuideFooter span {
+  color: #64748b;
+  font-size: 12px;
+}
+
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -412,6 +637,37 @@ button, input, select, textarea { font: inherit; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
+}
+
+.configRuntimeBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, .85fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.runtimeToolPanel,
+.runtimeActionPanel,
+.runtimeSchedulePanel {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 14px;
+}
+
+.runtimeToolPanel {
+  min-width: 0;
+}
+
+.runtimeActionPanel {
+  display: grid;
+  grid-template-columns: minmax(116px, 150px) minmax(0, 1fr);
+  gap: 14px;
+  align-content: start;
+}
+
+.runtimeSchedulePanel {
+  grid-column: 1 / -1;
 }
 
 .configField {
@@ -454,6 +710,32 @@ button, input, select, textarea { font: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.configCliRow .configSelect {
+  flex: 1 1 180px;
+}
+
+.configCliRow .configInput {
+  flex-basis: 100%;
+}
+
+.cliTestButton,
+.runtimeRunButton {
+  min-width: 96px;
+  justify-content: center;
+}
+
+.runtimeNumberInput.configInput.short {
+  width: 72px;
+  max-width: 72px;
+  flex: 0 0 auto;
+}
+
+.runtimeRunButton {
+  width: 100%;
+  height: 32px;
 }
 
 .configSelect {
@@ -3989,7 +4271,37 @@ body {
 }
 
 .aiChatSender .ant-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 10px;
+  padding: 0;
+}
+
+.aiChatSender .ant-space {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px !important;
+  white-space: nowrap;
+}
+
+.aiChatSender .ant-space-item {
+  display: inline-flex;
+}
+
+.aiChatSender .ant-sender-prefix {
+  align-self: flex-start;
+  padding-top: 2px;
+}
+
+.aiChatSender textarea,
+.aiChatSender .ant-sender-input {
+  min-height: 54px;
+  line-height: 1.45;
 }
 
 .resizeHandle::after {
@@ -4238,6 +4550,15 @@ body {
     width: 100%;
   }
 
+  .queueFilterBar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .queueFilterChips {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
   .queuePanel .mainTab {
     flex: 1;
     justify-content: center;
@@ -4249,6 +4570,750 @@ body {
 
   .queuePanel .branchGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ═══ Workbench Layout Refresh ═══ */
+
+.consoleShell {
+  background:
+    linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
+}
+
+.mainStage {
+  min-height: 100vh;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.commandBar {
+  min-height: 52px;
+  margin-bottom: 0;
+  border-radius: 10px;
+  border-color: #d9e1ec;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+  backdrop-filter: blur(12px);
+}
+
+.commandBarLeft {
+  flex: 1;
+}
+
+.commandBarPath {
+  max-width: 52vw;
+}
+
+.commandActions .button {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.workflowStrip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #d9e1ec;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .86);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.workflowStep {
+  position: relative;
+  min-width: 0;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 7px;
+  row-gap: 1px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfdff;
+  color: #1f2937;
+}
+
+.workflowStep:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -9px;
+  width: 9px;
+  height: 1px;
+  background: #cbd5e1;
+}
+
+.workflowIndex {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  grid-row: 1 / span 2;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.workflowStep svg {
+  color: #3b5dcc;
+}
+
+.workflowStep strong {
+  overflow: hidden;
+  color: #172033;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workflowStep small {
+  grid-column: 2 / span 2;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workbenchGrid {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 390px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.workbenchGrid.historyMode {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workbenchGrid.historyMode .queuePanel {
+  min-height: 620px;
+}
+
+.workbenchGrid.historyMode .queuePanel .mainTabContent {
+  overflow: auto;
+}
+
+.queuePanel {
+  min-height: 0;
+  height: calc(100vh - 156px);
+  display: flex;
+  flex-direction: column;
+  border-color: #d9e1ec;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .96);
+}
+
+.queuePanelHeader {
+  min-height: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.queuePanelTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.queuePanelTitle strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.queuePanelTitle span {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.queuePanel .mainTabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #eef3f8;
+}
+
+.queueFilterBar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e4ebf4;
+  background: #f8fafc;
+}
+
+.queueFilterIntro {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.queueFilterIntro svg {
+  color: #2563eb;
+}
+
+.queueFilterIntro strong {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  border-radius: 999px;
+  background: #e8f1ff;
+  color: #2563eb;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.queueFilterChips {
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.queueFilterChips::-webkit-scrollbar {
+  display: none;
+}
+
+.queueFilterChip {
+  max-width: 220px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  border: 1px solid #dbe6f3;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  padding: 0 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.queueFilterChip strong,
+.queueFilterChip code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queueFilterChip strong {
+  max-width: 72px;
+  color: #172033;
+}
+
+.queueFilterChip em {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-style: normal;
+}
+
+.queueFilterChip code {
+  max-width: 92px;
+  color: #2563eb;
+  font-size: 11px;
+}
+
+.queueFilterEmpty {
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.queueFilterResults {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid #e4ebf4;
+  background: #f8fafc;
+}
+
+.queueFilterResultLabel {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.queueFilterResults > strong {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #059669;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.queueFilterResultList {
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.queueFilterResultList::-webkit-scrollbar {
+  display: none;
+}
+
+.queueFilterResultChip {
+  max-width: 260px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  border: 1px solid #d8e4f2;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  padding: 0 8px;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.queueFilterResultChip:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.queueFilterResultChip span {
+  flex: 0 0 auto;
+  color: #2563eb;
+  font-weight: 800;
+}
+
+.queueFilterResultChip em {
+  overflow: hidden;
+  color: #475569;
+  font-style: normal;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.queuePanel .mainTab {
+  min-width: 0;
+  height: 32px;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.queuePanel .mainTabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queuePanel .mainTabCount {
+  min-width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+.queuePanel .mainTabContent {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.bugQueueList {
+  height: 100%;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.bugQueueCard {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #dfe7f2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.bugQueueCard.active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.bugQueueCardHeader,
+.bugQueueFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bugQueueId {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bugQueueId strong {
+  color: #1d4ed8;
+  font-size: 13px;
+}
+
+.bugQueueId span,
+.bugQueueTask {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bugQueueTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.bugQueueMeta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bugQueueMeta span {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 2px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bugQueueRemark {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+}
+
+.bugQueueRemark span,
+.bugQueueRemark small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bugQueueRemark small {
+  color: #64748b;
+}
+
+.bugQueueFooter .rowActions {
+  justify-content: flex-end;
+}
+
+.bugQueueFooter .screenshotCell {
+  min-width: 34px;
+}
+
+.bugQueueFooter .mutedText {
+  font-size: 11px;
+}
+
+.queuePanel .branchGrid {
+  height: 100%;
+  max-height: none;
+  grid-template-columns: 1fr;
+  align-content: start;
+  padding: 10px;
+}
+
+.queuePanel .branchButton {
+  min-height: 62px;
+  border-radius: 8px;
+}
+
+.reviewGrid {
+  min-width: 0;
+  min-height: 0;
+  height: calc(100vh - 156px);
+  margin-top: 0;
+}
+
+.reviewMain {
+  min-height: 0;
+}
+
+.reviewMainInner {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-color: #d9e1ec;
+  border-radius: 10px;
+}
+
+.approvalBar {
+  min-height: 46px;
+  flex-shrink: 0;
+  justify-content: space-between;
+  background: #fbfdff;
+}
+
+.reviewMeta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.approvalBranch {
+  max-width: min(48vw, 520px);
+  background: #fff;
+}
+
+.reviewFileCount,
+.reviewRunState {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.reviewFileCount {
+  background: #eef2f7;
+  color: #475569;
+}
+
+.reviewRunState.running {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.reviewRunState.pending {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.reviewRunState.clean {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.fixValidationCard {
+  flex-shrink: 0;
+  margin: 10px;
+  border-radius: 8px;
+}
+
+.diffWrap {
+  min-height: 0;
+  flex: 1;
+}
+
+.inspector {
+  position: static;
+  height: 100%;
+}
+
+.inspector .panel {
+  height: 100%;
+  border-color: #d9e1ec;
+  border-radius: 10px;
+}
+
+.resizeHandle::after {
+  background: #d7dfeb;
+}
+
+.blankState {
+  height: 100%;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .76);
+}
+
+.statusBar {
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  background: #172033;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+
+@media (max-width: 1280px) {
+  .workflowStrip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workflowStep:not(:last-child)::after {
+    display: none;
+  }
+
+  .workbenchGrid {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+
+  .reviewGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .resizeHandle,
+  .inspector {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .mainStage {
+    padding: 10px;
+  }
+
+  .commandBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .commandBarPath {
+    max-width: 100%;
+  }
+
+  .workflowStrip,
+  .workbenchGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .configGuideHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .configGuideIntro span {
+    white-space: normal;
+  }
+
+  .configStepNav {
+    grid-template-columns: 1fr;
+  }
+
+  .configStepNav::before {
+    display: none;
+  }
+
+  .configStepButton {
+    min-height: 64px;
+  }
+
+  .configPanel.configModal {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .configFieldRow {
+    grid-template-columns: 1fr;
+  }
+
+  .configRuntimeBody,
+  .runtimeActionPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .configGuideFooter {
+    justify-content: space-between;
+  }
+
+  .queuePanel,
+  .reviewGrid {
+    height: auto;
+    min-height: 420px;
+  }
+
+  .queuePanel .mainTabLabel {
+    display: none;
+  }
+
+  .queueFilterResults {
+    grid-template-columns: auto auto;
+  }
+
+  .queueFilterResultList {
+    grid-column: 1 / -1;
+  }
+
+  .approvalBar,
+  .reviewMeta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .approvalBranch {
+    max-width: 100%;
   }
 }
 

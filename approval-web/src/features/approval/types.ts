@@ -26,6 +26,7 @@ export type BugItem = {
   excel_row: number;
   branch: string;
   source_system: string;
+  priority: string;
   primary_category: string;
   secondary_category: string;
   requester_status: string;
