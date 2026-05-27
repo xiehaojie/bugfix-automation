@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from bugfix_automation.ai_cli import ai_cli_kind, ai_cli_print_command
@@ -40,17 +41,26 @@ def browse_dirs(path: str = Query("~")):
 
 @router.post("/api/workspace/select")
 def post_workspace_select(payload: WorkspaceSelectRequest, config: Config = Depends(get_config)):
-    return select_workspace(config, payload.workspace_id)
+    try:
+        return select_workspace(config, payload.workspace_id)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
 
 @router.post("/api/workspace/add")
 def post_workspace_add(payload: WorkspaceAddRequest):
-    return add_workspace(payload.model_dump())
+    try:
+        return add_workspace(payload.model_dump())
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
 
 @router.post("/api/workspace/remove")
 def post_workspace_remove(payload: WorkspaceRemoveRequest):
-    return remove_workspace(payload.workspace_id)
+    try:
+        return remove_workspace(payload.workspace_id)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
 
 @router.post("/api/config/update")
@@ -71,6 +81,8 @@ class CliTestRequest(BaseModel):
 async def post_cli_test(payload: CliTestRequest, config: Config = Depends(get_config)):
     tool = payload.cli_tool.strip() or config.cli_tool
     test_prompt = "Reply with exactly: CONNECTED"
+    timeout_seconds = 90
+    proc: asyncio.subprocess.Process | None = None
     try:
         if ai_cli_kind(tool) == "claude":
             proc = await asyncio.create_subprocess_exec(
@@ -79,7 +91,7 @@ async def post_cli_test(payload: CliTestRequest, config: Config = Depends(get_co
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(test_prompt.encode()), timeout=30)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(test_prompt.encode()), timeout=timeout_seconds)
         else:
             proc = await asyncio.create_subprocess_exec(
                 *ai_cli_print_command(tool),
@@ -89,7 +101,7 @@ async def post_cli_test(payload: CliTestRequest, config: Config = Depends(get_co
             )
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(test_prompt.encode()),
-                timeout=30,
+                timeout=timeout_seconds,
             )
         if proc.returncode == 0:
             output = stdout.decode(errors="replace").strip()
@@ -98,5 +110,10 @@ async def post_cli_test(payload: CliTestRequest, config: Config = Depends(get_co
         return {"ok": False, "error": err[:200] or f"退出码 {proc.returncode}"}
     except FileNotFoundError:
         return {"ok": False, "error": f"未找到命令: {tool}"}
+    except PermissionError as exc:
+        return {"ok": False, "error": f"命令无执行权限: {exc}"}
     except asyncio.TimeoutError:
-        return {"ok": False, "error": "请求超时（30s），请检查网络或 API Key 配置"}
+        if proc is not None:
+            proc.kill()
+            await proc.wait()
+        return {"ok": False, "error": f"请求超时（{timeout_seconds}s），请检查网络或 API Key 配置"}

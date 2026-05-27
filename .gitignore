@@ -1,11 +1,15 @@
 .worktrees/
 .target-worktrees/
+.local-codex-cli/
+.tmp-edge*/
+examples/.validation-worktrees/
 __pycache__/
 *.pyc
 .DS_Store
 *.sqlite3-shm
 *.sqlite3-wal
 *.sqlite3-journal
+data/*.sqlite3
 runs/
 logs/
 uploads/

@@ -11,11 +11,18 @@ from bugfix_automation.scheduler import install_launchd_at
 from bugfix_automation.storage.settings import get_setting, set_setting
 from bugfix_automation.approval_server import serve, serve_api_only
 from bugfix_automation.application import integration_service
+from bugfix_automation.bootstrap import doctor, init_project, print_check_results
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="夜间前端 bug 自动修复工具")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    init_parser = subparsers.add_parser("init", help="初始化本地 demo 配置、示例 Excel 和 demo 目标仓库")
+    init_parser.add_argument("--locale", choices=("zh-CN", "en"), default="zh-CN", help="初始化中文或英文 demo 配置")
+    init_parser.add_argument("--reset-config", action="store_true", help="用 config.example.yaml 覆盖当前 config.yaml")
+    init_parser.add_argument("--reset-runtime", action="store_true", help="删除本地 SQLite 运行时设置并重新生成 demo 默认值")
+    init_parser.add_argument("--skip-demo-repo", action="store_true", help="不初始化 examples/demo-target-repo 的 Git 仓库")
+    subparsers.add_parser("doctor", help="检查 Python、Git、Node、AI CLI、配置和 demo 仓库状态")
     list_parser = subparsers.add_parser("list", help="列出符合筛选规则的 bug")
     list_parser.add_argument("--dry-run", action="store_true", help="只生成演练报告，不启动 AI CLI")
     one_parser = subparsers.add_parser("run-one", help="按 Excel 行号或 bug 序号运行一条")
@@ -50,6 +57,13 @@ def main() -> int:
     launchd_parser.add_argument("--hour", type=int, default=None, help="每天几点执行，0-23")
     launchd_parser.add_argument("--minute", type=int, default=None, help="每小时第几分钟执行，0-59")
     args = parser.parse_args()
+
+    if args.command == "init":
+        for message in init_project(locale=args.locale, reset_config=args.reset_config, reset_runtime=args.reset_runtime, init_demo_repo=not args.skip_demo_repo):
+            print(message)
+        return print_check_results(doctor())
+    if args.command == "doctor":
+        return print_check_results(doctor())
 
     config = load_config()
     if args.command == "list":

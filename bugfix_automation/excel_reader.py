@@ -44,6 +44,20 @@ def read_sheet(path: Path, sheet_name: str) -> list[dict[str, str]]:
     return output
 
 
+def sheet_names(path: Path) -> list[str]:
+    with zipfile.ZipFile(path) as archive:
+        return _sheet_names(archive)
+
+
+def resolve_sheet_name(path: Path, preferred: str) -> str:
+    names = sheet_names(path)
+    if preferred in names:
+        return preferred
+    if not names:
+        raise ValueError(f"Workbook has no worksheets: {path}")
+    return names[0]
+
+
 def _read_shared_strings(archive: zipfile.ZipFile) -> list[str]:
     if "xl/sharedStrings.xml" not in archive.namelist():
         return []
@@ -54,15 +68,24 @@ def _read_shared_strings(archive: zipfile.ZipFile) -> list[str]:
     return strings
 
 
+def _sheet_names(archive: zipfile.ZipFile) -> list[str]:
+    workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+    return [str(sheet.attrib.get("name", "")) for sheet in workbook.findall("a:sheets/a:sheet", NS) if sheet.attrib.get("name")]
+
+
 def _sheet_path(archive: zipfile.ZipFile, sheet_name: str) -> str:
     workbook = ET.fromstring(archive.read("xl/workbook.xml"))
     relationship_id = None
+    available: list[str] = []
     for sheet in workbook.findall("a:sheets/a:sheet", NS):
+        if sheet.attrib.get("name"):
+            available.append(str(sheet.attrib.get("name")))
         if sheet.attrib.get("name") == sheet_name:
             relationship_id = sheet.attrib.get(f"{{{REL_NS}}}id")
             break
     if relationship_id is None:
-        raise ValueError(f"Worksheet not found: {sheet_name}")
+        suffix = f"；可用工作表：{', '.join(available)}" if available else ""
+        raise ValueError(f"Worksheet not found: {sheet_name}{suffix}")
 
     rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     for rel in rels.findall(f"{{{PKG_REL_NS}}}Relationship"):

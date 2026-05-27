@@ -40,8 +40,12 @@ def serve(config: Config, host: str = "127.0.0.1", port: int | None = None) -> N
         return
     if not (web_dir / "node_modules").exists():
         print("首次启动需要安装审批台前端依赖，正在执行 npm install ...")
-        subprocess.run(["npm", "install"], cwd=web_dir, check=True)
-    subprocess.run(["npm", "run", "dev", "--", "--hostname", host, "--port", str(web_port)], cwd=web_dir, env=env, check=True)
+        subprocess.run([_npm_command(), "install"], cwd=web_dir, check=True)
+    subprocess.run([_npm_command(), "run", "dev", "--", "--hostname", host, "--port", str(web_port)], cwd=web_dir, env=env, check=True)
+
+
+def _npm_command() -> str:
+    return "npm.cmd" if os.name == "nt" else "npm"
 
 
 def serve_api_only(config: Config, host: str = "127.0.0.1", port: int | None = None) -> None:

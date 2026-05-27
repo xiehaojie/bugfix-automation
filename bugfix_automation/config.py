@@ -77,19 +77,19 @@ class CapabilitySystemConfig:
     codex: CapabilityProviderConfig = field(
         default_factory=lambda: CapabilityProviderConfig(
             source="superpowers",
-            required_skills=(
+            optional_skills=(
                 "superpowers:using-superpowers",
                 "superpowers:test-driven-development",
                 "superpowers:systematic-debugging",
                 "superpowers:verification-before-completion",
                 "superpowers:requesting-code-review",
+                "superpowers:subagent-driven-development",
             ),
-            optional_skills=("superpowers:subagent-driven-development",),
         )
     )
     claude: CapabilityProviderConfig = field(
         default_factory=lambda: CapabilityProviderConfig(
-            source="/Users/xiehaojie/code/everything-claude-code",
+            source="",
             required_agents=(
                 "planner",
                 "architect",
@@ -124,7 +124,7 @@ class Config:
     storage_db_path: Path = Path("data/app.sqlite3")
     excel_processed_status_column: str = "对接人状态"
     excel_processed_status_value: str = "已处理"
-    active_workspace: str = "pc-web"
+    active_workspace: str = "demo"
     workspaces: tuple[WorkspaceConfig, ...] = ()
     filters: tuple[FilterRule, ...] = ()
     branch_summary_fields: tuple[str, ...] = ()
@@ -152,18 +152,18 @@ def load_config(config_path: Path | None = None) -> Config:
             return os.environ[env_name]
         return yaml_values.get(key, default)
 
-    target_repo = _path(value("target_repo", "BUGFIX_TARGET_REPO", "/Users/xiehaojie/code/monorepo"), repo_root)
+    target_repo = _path(value("target_repo", "BUGFIX_TARGET_REPO", repo_root / "examples" / "demo-target-repo"), repo_root)
     schedule = yaml_values.get("schedule", {})
-    active_workspace = str(value("active_workspace", "BUGFIX_ACTIVE_WORKSPACE", "pc-web"))
+    active_workspace = str(value("active_workspace", "BUGFIX_ACTIVE_WORKSPACE", "demo"))
     worktree_root = _path(value("worktree_root", "BUGFIX_WORKTREE_ROOT", repo_root / ".target-worktrees"), repo_root)
     runs_root = _path(value("runs_root", "BUGFIX_RUNS_ROOT", repo_root / "runs"), repo_root)
     logs_root = _path(value("logs_root", "BUGFIX_LOGS_ROOT", repo_root / "logs"), repo_root)
     data_root = _path(value("data_root", "BUGFIX_DATA_ROOT", repo_root / "data"), repo_root)
     storage_db_path = _path(value("storage_db_path", "BUGFIX_STORAGE_DB_PATH", data_root / "app.sqlite3"), repo_root)
-    fallback_app_path = str(value("target_app_path", "BUGFIX_TARGET_APP_PATH", "apps/pc-web"))
+    fallback_app_path = str(value("target_app_path", "BUGFIX_TARGET_APP_PATH", "src"))
     workspaces = _workspace_configs(yaml_values, repo_root, target_repo, fallback_app_path)
     active = _active_workspace(workspaces, active_workspace) if workspaces else None
-    filters = _filter_rules(yaml_values, str(value("assignee", "BUGFIX_ASSIGNEE", "谢浩杰")))
+    filters = _filter_rules(yaml_values, str(value("assignee", "BUGFIX_ASSIGNEE", "演示用户")))
     prompt = yaml_values.get("prompt", {})
     if not isinstance(prompt, dict):
         prompt = {}
@@ -180,9 +180,9 @@ def load_config(config_path: Path | None = None) -> Config:
     )
     global_max_concurrency = int(value("max_concurrency", "BUGFIX_MAX_CONCURRENCY", active.max_concurrency if active else 2))
     return Config(
-        excel_path=_path(value("excel_path", "BUGFIX_EXCEL_PATH", "/Users/xiehaojie/Desktop/亦城数智人在线清单.xlsx"), repo_root),
-        sheet_name=str(value("sheet_name", "BUGFIX_SHEET_NAME", "在线问题清单")),
-        assignee=str(value("assignee", "BUGFIX_ASSIGNEE", "谢浩杰")),
+        excel_path=_path(value("excel_path", "BUGFIX_EXCEL_PATH", repo_root / "examples" / "bugs.zh-CN.xlsx"), repo_root),
+        sheet_name=str(value("sheet_name", "BUGFIX_SHEET_NAME", "Bug清单")),
+        assignee=str(value("assignee", "BUGFIX_ASSIGNEE", "演示用户")),
         target_repo=active.target_repo if active else target_repo,
         target_app_path=active.target_app_path if active else fallback_app_path,
         worktree_root=worktree_root,
@@ -620,8 +620,8 @@ def _workspace_configs(values: dict[str, Any], repo_root: Path, fallback_repo: P
         return ()
     return (
         WorkspaceConfig(
-            id="pc-web",
-            name="PC Web",
+            id="demo",
+            name="中文 Demo 应用",
             target_repo=fallback_repo,
             target_app_path=fallback_app,
             scope_paths=(fallback_app,),
@@ -666,9 +666,8 @@ def _filter_rules(values: dict[str, Any], assignee: str) -> tuple[FilterRule, ..
     if rules:
         return tuple(rules)
     return (
-        FilterRule("对接人", "equals", assignee, (assignee,)),
-        FilterRule("对接人状态", "not_in", values=("已解决", str(values.get("excel_processed_status_value", "已处理")))),
-        FilterRule("来源系统", "in", values=("小亦PC", "小亦APP")),
+        FilterRule("处理人", "equals", assignee, (assignee,)),
+        FilterRule("处理状态", "not_in", values=("已处理", "已关闭", str(values.get("excel_processed_status_value", "已处理")))),
         FilterRule("提出人状态", "in", values=("待处理", "处理中")),
     )
 

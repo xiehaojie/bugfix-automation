@@ -102,13 +102,23 @@ def render_capability_contract(config: Config) -> str:
         )
 
     skills = _configured_names(provider_config.required_skills, provider_config.optional_skills)
+    available_optional = [
+        item["name"]
+        for item in status.get("optional", {}).get("skills", [])
+        if item.get("available")
+    ]
+    optional_note = (
+        f"Installed optional Superpowers skills: {', '.join(available_optional)}"
+        if available_optional
+        else "No optional Superpowers skills detected. Continue with normal Codex behavior; do not ask the user to install skills for this run."
+    )
     return (
-        "Capability system: Codex + Superpowers\n\n"
-        "Use provider-native Codex capabilities from Superpowers when applicable.\n"
-        f"Configured skills: {skills}\n\n"
-        "Do not replace installed skills with a local prompt imitation.\n"
-        "If a required capability is unavailable, state that clearly in the final report.\n\n"
-        f"Capability warnings:\n{warnings}"
+        "Capability system: Codex with optional Superpowers enhancements\n\n"
+        "Superpowers skills are optional accelerators, not a requirement for this task.\n"
+        f"Configured optional skills: {skills}\n"
+        f"{optional_note}\n\n"
+        "If optional skills are unavailable, continue normally with the repository context, tests, and verification commands.\n"
+        "Do not ask the user to repeatedly install skills unless they explicitly request the enhanced workflow."
     )
 
 
@@ -159,7 +169,7 @@ def _codex_status(provider_config: CapabilityProviderConfig) -> dict[str, Any]:
         for name in provider_config.optional_skills
     ]
     warnings = [
-        f"Missing required Superpowers skill: {item['name']}"
+        f"缺少必需 Codex 能力: {item['name']}"
         for item in required_skills
         if not item["available"]
     ]

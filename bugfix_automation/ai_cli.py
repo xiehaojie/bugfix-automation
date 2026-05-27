@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import sys
 import re
 from pathlib import Path
 
@@ -23,6 +25,56 @@ def ai_cli_label(cli_tool: str) -> str:
     return "AI CLI"
 
 
+def resolve_ai_cli_tool(cli_tool: str) -> str:
+    tool = cli_tool.strip()
+    if not tool:
+        return tool
+
+    candidate = Path(tool).expanduser()
+    if candidate.exists():
+        return str(candidate)
+    if sys.platform.startswith("win"):
+        suffixed = _windows_suffixed_candidate(candidate)
+        if suffixed is not None:
+            return str(suffixed)
+        if candidate.parent != Path("."):
+            return tool
+        for suffix in (".cmd", ".bat", ".exe"):
+            found = shutil.which(f"{tool}{suffix}")
+            if found:
+                found_path = Path(found)
+                if found_path.suffix.lower() == ".exe":
+                    cmd_variant = found_path.with_suffix(".cmd")
+                    bat_variant = found_path.with_suffix(".bat")
+                    if cmd_variant.exists():
+                        return str(cmd_variant)
+                    if bat_variant.exists():
+                        return str(bat_variant)
+                return found
+        found = shutil.which(tool)
+        if found:
+            found_path = Path(found)
+            if found_path.suffix.lower() == ".exe":
+                cmd_variant = found_path.with_suffix(".cmd")
+                bat_variant = found_path.with_suffix(".bat")
+                if cmd_variant.exists():
+                    return str(cmd_variant)
+                if bat_variant.exists():
+                    return str(bat_variant)
+            return found
+    return shutil.which(tool) or tool
+
+
+def _windows_suffixed_candidate(candidate: Path) -> Path | None:
+    if candidate.suffix:
+        return None
+    for suffix in (".exe", ".cmd", ".bat"):
+        suffixed = candidate.with_suffix(suffix)
+        if suffixed.exists():
+            return suffixed
+    return None
+
+
 def ai_log_dir_name(cli_tool: str) -> str:
     kind = ai_cli_kind(cli_tool)
     if kind in {"claude", "codex"}:
@@ -32,9 +84,10 @@ def ai_log_dir_name(cli_tool: str) -> str:
 
 
 def ai_cli_command(cli_tool: str, worktree_path: str, prompt: str, image_paths: list[Path] | None = None) -> list[str]:
+    executable = resolve_ai_cli_tool(cli_tool)
     if ai_cli_kind(cli_tool) == "claude":
         command = [
-            cli_tool,
+            executable,
             "--print",
             "--permission-mode",
             "bypassPermissions",
@@ -46,9 +99,9 @@ def ai_cli_command(cli_tool: str, worktree_path: str, prompt: str, image_paths: 
         return command
 
     command = [
-        cli_tool,
+        executable,
         "exec",
-        "--full-auto",
+        "--dangerously-bypass-approvals-and-sandbox",
         "--cd",
         worktree_path,
     ]
@@ -59,9 +112,10 @@ def ai_cli_command(cli_tool: str, worktree_path: str, prompt: str, image_paths: 
 
 
 def ai_cli_print_command(cli_tool: str) -> list[str]:
+    executable = resolve_ai_cli_tool(cli_tool)
     if ai_cli_kind(cli_tool) == "claude":
-        return [cli_tool, "--print"]
-    return [cli_tool, "exec", "-"]
+        return [executable, "--print"]
+    return [executable, "exec", "-"]
 
 
 def _unique_existing_parent_dirs(paths: list[Path]) -> list[Path]:

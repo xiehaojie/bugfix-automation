@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 
 from bugfix_automation.api.dependencies import get_config
 from bugfix_automation.api.schemas import BugRowRequest, OptimizePromptRequest
@@ -12,7 +13,10 @@ router = APIRouter()
 
 @router.get("/api/bugs")
 def get_bugs(config: Config = Depends(get_config)):
-    return {"bugs": bug_payload(config)}
+    try:
+        return {"bugs": bug_payload(config)}
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
 
 @router.post("/api/bugs/run")

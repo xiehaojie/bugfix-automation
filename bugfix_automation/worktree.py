@@ -219,6 +219,20 @@ def create_no_push_git_wrapper(worktree_path: Path) -> Path:
     wrapper_dir = worktree_path / ".bugfix-automation-bin"
     wrapper_dir.mkdir(parents=True, exist_ok=True)
     real_git = shutil.which("git") or "/usr/bin/git"
+    if os.name == "nt":
+        wrapper = wrapper_dir / "git.cmd"
+        wrapper.write_text(
+            f"""@echo off
+if /I "%~1"=="push" (
+  echo 自动修复流程已禁止 git push 1>&2
+  exit /b 1
+)
+"{real_git}" %*
+""",
+            encoding="utf-8",
+        )
+        return wrapper_dir
+
     wrapper = wrapper_dir / "git"
     wrapper.write_text(
         f"""#!/bin/sh

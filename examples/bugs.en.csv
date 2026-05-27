@@ -1,0 +1,4 @@
+ID,Title,Description,Priority,Source,Category,Area,Reporter,Created At,Requester Status,Assignee,Assignee Status,Resolved At,Notes,Extra Notes
+1,Empty bug list message is generic,When the bug list is empty the UI shows "No items"; it should show "No bugs yet" so reviewers know the app is working.,High,Demo Web,Frontend,Empty State,Alice,2026/05/25,Open,demo-user,Open,,Keep the change inside src.,
+2,Add button label is unclear,The primary add button says "Add"; it should say "Add bug" on the bug dashboard.,Medium,Demo Web,Frontend,Copy,Bob,2026/05/25,In Progress,demo-user,Open,,Small text-only change.,
+3,Closed bug should be ignored,This row demonstrates filtering and should not be selected because it is already done.,Low,Demo Web,Frontend,Filtering,Carol,2026/05/25,Open,demo-user,Done,,Filtered out.,
