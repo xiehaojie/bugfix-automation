@@ -1,76 +1,30 @@
-# 中文 demo 配置。重置命令：
-#   python -m bugfix_automation.cli init --reset-config --reset-runtime
+# Bugfix automation bootstrap config.
+# Runtime settings live in SQLite app_settings. Keep this file small so uploads,
+# filters, prompts, workspaces, and schedules can be changed from the UI safely.
 
-excel_path: examples/bugs.zh-CN.xlsx
-sheet_name: Bug清单
-assignee: 演示用户
-active_workspace: demo
-max_concurrency: 1
-
-target_repo: examples/demo-target-repo
-target_app_path: src
-
-worktree_root: .target-worktrees
-runs_root: runs
-logs_root: logs
 data_root: data
 storage_db_path: data/app.sqlite3
 
 cli_tool: codex
 approval_web_port: 8765
 approval_api_port: 8766
-launchd_label: local.bugfix-automation.nightly
 
-excel_processed_status_column: 处理状态
-excel_processed_status_value: 已处理
-
-workspaces:
-  - id: demo
-    name: 中文 Demo 应用
-    target_repo: examples/demo-target-repo
-    target_app_path: src
-    scope_paths: src
-    verify_commands: npm test
-    prompt_context_paths: src
-    max_concurrency: 1
-
-filters:
-  - field: 处理人
-    op: equals
-    value: 演示用户
-  - field: 处理状态
-    op: not_in
-    values: 已处理,已关闭
-  - field: 提出人状态
-    op: in
-    values: 待处理,处理中
-
-prompt:
-  fields: 序号,标题,问题描述,优先级,来源系统,提出人状态,处理人,处理状态,备注
-  template: 请用最小范围修改修复这个 bug。改动必须限制在配置的 target_app_path 内；如果需要后端或数据改造，请停止并说明原因。
-  context_paths: src
-
-branch_summary_fields:
-  - 标题
-
-excel_profile:
-  canonical_fields:
-    issue_id: 序号
-    source_system: 来源系统
-    priority: 优先级
-    primary_category: 一级分类
-    secondary_category: 二级分类
-    requester: 提出人
-    request_date: 提出日期
-    requester_status: 提出人状态
-    assignee: 处理人
-    assignee_status: 处理状态
-    resolved_date: 解决日期
-    description: 问题描述
-    remark: 备注
-    remark2: 备注2
-  prompt:
-    fields: 序号,标题,问题描述,优先级,来源系统,提出人状态,处理人,处理状态,备注
-    template: 请用最小范围修改修复这个 bug。改动必须限制在配置的 target_app_path 内；如果需要后端或数据改造，请停止并说明原因。
-    context_paths: src
-    branch_summary_fields: 标题
+# Online sheet provider credentials. Environment variables with the same
+# meaning still take precedence, so keep real production secrets out of git if
+# this repository is shared.
+online_sheets:
+  tencent_docs:
+    token: ""
+    mcp_url: https://docs.qq.com/openapi/mcp
+    mcp_tool: get_content
+    mcp_arguments_template: '{"url":"{source_url}","range":"{range}"}'
+    read_url_template: ""
+    access_token: ""
+    client_id: ""
+    open_id: ""
+  wps:
+    access_token: ""
+    api_base_url: https://openapi.wps.cn
+    spreadsheet_api_kind: et
+    default_sheet_idx: "0"
+    read_url_template: ""

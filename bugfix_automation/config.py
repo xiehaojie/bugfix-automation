@@ -276,6 +276,7 @@ def _merge_runtime_settings(yaml_values: dict[str, Any], sqlite_settings: dict[s
     automation_settings = sqlite_settings.get("automation")
     if isinstance(automation_settings, dict):
         for key in (
+            "assignee",
             "max_concurrency",
             "launchd_label",
             "cli_tool",
