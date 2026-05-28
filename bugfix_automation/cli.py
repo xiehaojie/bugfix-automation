@@ -5,12 +5,12 @@ import json
 from datetime import datetime
 
 from bugfix_automation.config import load_config
-from bugfix_automation.filtering import make_branch_name
-from bugfix_automation.runner import list_bugs, run_once, run_one
-from bugfix_automation.scheduler import install_launchd_at
+from bugfix_automation.domain.filtering import make_branch_name
+from bugfix_automation.orchestration.bug_runner import list_bugs, run_once, run_one
+from bugfix_automation.scheduling.scheduler import install_launchd_at
 from bugfix_automation.storage.settings import get_setting, set_setting
-from bugfix_automation.approval_server import serve, serve_api_only
-from bugfix_automation.application import integration_service
+from bugfix_automation.server.approval_server import serve, serve_api_only
+from bugfix_automation.orchestration import integration
 from bugfix_automation.bootstrap import doctor, init_project, print_check_results
 
 
@@ -127,7 +127,7 @@ def main() -> int:
 
 def _handle_integration(config, args) -> int:
     if args.int_command == "list":
-        runs = integration_service.list_runs(config)
+        runs = integration.list_runs(config)
         for run in runs:
             print(f"  {run['run_id']}  [{run['status']}]  target={run['target_branch']}  items={len(run.get('items', []))}")
         if not runs:
@@ -135,14 +135,14 @@ def _handle_integration(config, args) -> int:
         return 0
     if args.int_command == "create":
         workspace_id = args.workspace or config.active_workspace
-        data = integration_service.create_run(config, workspace_id, args.target_branch, args.branches)
+        data = integration.create_run(config, workspace_id, args.target_branch, args.branches)
         print(f"已创建集成单: {data['run_id']}")
         print(f"  目标分支: {data['target_branch']}")
         print(f"  集成分支: {data['integration_branch']}")
         print(f"  来源分支: {len(data['items'])} 个")
         return 0
     if args.int_command == "start":
-        data = integration_service.start_run(config, args.run_id)
+        data = integration.start_run(config, args.run_id)
         applied = sum(1 for item in data["items"] if item["status"] == "applied")
         failed = sum(1 for item in data["items"] if item["status"] == "conflict")
         print(f"集成完成: {data['status']}")
@@ -150,18 +150,18 @@ def _handle_integration(config, args) -> int:
         print(f"  验证: {data.get('verify', {}).get('status', 'N/A')}")
         return 0
     if args.int_command == "confirm":
-        data = integration_service.confirm_run(config, args.run_id)
+        data = integration.confirm_run(config, args.run_id)
         print(f"已确认提交: {data['final_commit']}")
         return 0
     if args.int_command == "cleanup":
-        data = integration_service.cleanup_run(config, args.run_id)
+        data = integration.cleanup_run(config, args.run_id)
         cleaned = data.get("cleaned_branches", [])
         print(f"已清理 {len(cleaned)} 个来源分支:")
         for b in cleaned:
             print(f"  - {b}")
         return 0
     if args.int_command == "abort":
-        integration_service.abort_run(config, args.run_id)
+        integration.abort_run(config, args.run_id)
         print("已中止集成单。")
         return 0
     return 2

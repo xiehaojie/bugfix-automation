@@ -8,10 +8,10 @@ import shutil
 import subprocess
 import sys
 
-from bugfix_automation.application.online_sheet_service import _table_to_xlsx_bytes
-from bugfix_automation.ai_cli import ai_cli_label, resolve_ai_cli_tool
+from bugfix_automation.services.online_sheet_service import _table_to_xlsx_bytes
+from bugfix_automation.domain.ai_cli import ai_cli_label, resolve_ai_cli_tool
 from bugfix_automation.config import load_config, repo_root_path
-from bugfix_automation.excel_reader import read_sheet
+from bugfix_automation.excel.reader import read_sheet
 from bugfix_automation.integrations.online_sheets.base import SheetRef, SheetTable
 
 

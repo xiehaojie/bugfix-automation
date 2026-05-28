@@ -3,8 +3,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from bugfix_automation.excel_reader import read_sheet
-from bugfix_automation.excel_writer import update_cell_by_header
+from bugfix_automation.excel.reader import read_sheet
+from bugfix_automation.excel.writer import update_cell_by_header
 
 
 def write_minimal_xlsx(path: Path) -> None:

@@ -5,6 +5,14 @@
 examples/.validation-worktrees/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
 .DS_Store
 *.sqlite3-shm
 *.sqlite3-wal

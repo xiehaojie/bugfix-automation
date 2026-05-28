@@ -3,8 +3,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from bugfix_automation.application.config_service import update_automation_config, update_filters
-from bugfix_automation.application.scheduler_service import install
+from bugfix_automation.services.config_service import update_automation_config, update_filters
+from bugfix_automation.services.scheduler_service import install
 from bugfix_automation.config import Config, load_config, repo_root_path, update_config_yaml
 from bugfix_automation.storage.settings import get_setting, set_setting
 
@@ -508,8 +508,8 @@ approval_api_port: 8766
             )
             set_setting(db_path, "automation", {"max_concurrency": 3, "cli_tool": "codex"})
             with patch.dict("os.environ", {"BUGFIX_STORAGE_DB_PATH": str(db_path)}):
-                with patch("bugfix_automation.application.scheduler_service.install_launchd_at", return_value=root / "launchd.plist"):
-                    with patch("bugfix_automation.application.scheduler_service.launchd_status", return_value={}):
+                with patch("bugfix_automation.services.scheduler_service.install_launchd_at", return_value=root / "launchd.plist"):
+                    with patch("bugfix_automation.services.scheduler_service.launchd_status", return_value={}):
                         install(config, 8, 45)
             self.assertEqual(
                 get_setting(db_path, "automation"),

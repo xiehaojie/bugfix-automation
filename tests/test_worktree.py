@@ -3,10 +3,10 @@ import unittest
 from pathlib import Path
 import subprocess
 
-from bugfix_automation.capability_system import install_capabilities
+from bugfix_automation.domain.capability_system import install_capabilities
 from bugfix_automation.config import CapabilityProviderConfig, CapabilitySystemConfig, Config
-from bugfix_automation.runner import runtime_path_prefix
-from bugfix_automation.worktree import create_no_push_git_wrapper, install_project_agents, out_of_scope_paths, rename_current_branch, symlink_node_modules, tracked_changed_files, worktree_path_for_branch, write_worktree_exclude
+from bugfix_automation.orchestration.bug_runner import runtime_path_prefix
+from bugfix_automation.git.worktree import create_no_push_git_wrapper, install_project_agents, out_of_scope_paths, rename_current_branch, symlink_node_modules, tracked_changed_files, worktree_path_for_branch, write_worktree_exclude
 
 
 def _capability_test_config(source: Path) -> Config:

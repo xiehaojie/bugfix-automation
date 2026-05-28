@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from bugfix_automation.api.app import create_app
+from bugfix_automation.server.api.app import create_app
 from bugfix_automation.config import Config, WorkspaceConfig
 from bugfix_automation.storage.db import connect
 from bugfix_automation.storage.repositories import create_ai_session, create_operation, finish_ai_session
@@ -373,7 +373,7 @@ class FastApiApprovalTest(unittest.TestCase):
                 )
             )
             with unittest.mock.patch(
-                "bugfix_automation.application.excel_adapter_service.asyncio.create_subprocess_exec",
+                "bugfix_automation.services.excel_adapter_service.asyncio.create_subprocess_exec",
                 new=unittest.mock.AsyncMock(return_value=proc),
             ):
                 response = client.post("/api/excel/adapter/analyze")
@@ -464,7 +464,7 @@ class FastApiApprovalTest(unittest.TestCase):
         self.assertEqual(response.json(), {"ok": True, "content": "from worktree\n"})
 
     def test_approval_api_module_is_only_a_fastapi_facade(self) -> None:
-        source = Path("bugfix_automation/approval_api.py").read_text(encoding="utf-8")
+        source = Path("bugfix_automation/server/approval_api.py").read_text(encoding="utf-8")
 
         self.assertNotIn("BaseHTTPRequestHandler", source)
         self.assertNotIn("ThreadingHTTPServer", source)
@@ -472,11 +472,11 @@ class FastApiApprovalTest(unittest.TestCase):
         self.assertNotIn("def _upload_excel", source)
 
     def test_approval_api_server_uses_live_config_loader_after_startup(self) -> None:
-        from bugfix_automation.approval_api import serve_api
+        from bugfix_automation.server.approval_api import serve_api
 
         with tempfile.TemporaryDirectory() as tmp:
             config = self.make_config(Path(tmp))
-            with unittest.mock.patch("bugfix_automation.approval_api.uvicorn.run") as run:
+            with unittest.mock.patch("bugfix_automation.server.approval_api.uvicorn.run") as run:
                 serve_api(config)
 
         app = run.call_args.args[0]

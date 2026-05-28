@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from bugfix_automation.application import online_sheet_service
+from bugfix_automation.services import online_sheet_service
 from bugfix_automation.config import Config
-from bugfix_automation.excel_reader import read_sheet
+from bugfix_automation.excel.reader import read_sheet
 from bugfix_automation.integrations.online_sheets.base import SheetRef, SheetTable
 from bugfix_automation.integrations.online_sheets.tencent_docs import TencentDocsSheetProvider
 from bugfix_automation.integrations.online_sheets.wps import WpsSheetProvider
